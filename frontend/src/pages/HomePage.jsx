@@ -1,47 +1,55 @@
 import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { BookOpen, Camera, Map, MessageCircle, Sparkles } from 'lucide-react'
+import { BookOpen, Camera, MessageCircle, Sparkles, Trophy } from 'lucide-react'
 
 function HomePage() {
   return (
-    <section className="page home-page">
-      <motion.div className="hero-panel" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}>
-        <p className="eyebrow">SoloMate</p>
-        <h1>今天我陪你走</h1>
-        <p className="lead">一个给单人旅行者的轻量 AI 搭子：陪你聊天、看照片、发小任务，也把今天写成日记。</p>
-        <div className="hero-actions">
+    <section className="page home-page diffuse-bg">
+      <motion.section
+        className="home-hero glass-card"
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+      >
+        <div className="home-hero-orb-wrap">
+          <div className="gradient-orb home-hero-orb" aria-hidden="true" />
+          <div className="voice-orb voice-wave home-buddy-orb" aria-hidden="true" />
+        </div>
+
+        <div className="home-hero-copy">
+          <p className="eyebrow">SoloMate</p>
+          <h1 className="page-title">今天，我陪你走</h1>
+          <p className="page-subtitle">一个人出发，也有人陪你看见世界</p>
+        </div>
+
+        <div className="home-hero-actions">
           <Link className="primary-button" to="/persona">
             <Sparkles size={20} />
-            选择我的搭子
+            选择我的旅行搭子
           </Link>
-          <Link className="voice-button" to="/chat">
-            开始语音陪伴
+          <Link className="ghost-button" to="/photo">
+            <Camera size={19} />
+            拍照寄给搭子
           </Link>
         </div>
-      </motion.div>
+      </motion.section>
 
-      <div className="quick-grid">
-        <Link to="/photo" className="quick-card">
-          <Camera size={24} />
-          <span>拍照给搭子看</span>
-          <small>上传照片，得到温柔反馈</small>
+      <section className="home-entry-grid" aria-label="辅助入口">
+        <Link to="/chat" className="soft-card home-entry-card">
+          <MessageCircle size={22} />
+          <strong>陪伴通话</strong>
+          <span>慢慢说，搭子会在这里听你开口。</span>
         </Link>
-        <Link to="/badges" className="quick-card">
-          <Map size={24} />
-          <span>城市任务</span>
-          <small>把路线变成低压力挑战</small>
+        <Link to="/badges" className="soft-card home-entry-card stamp-card">
+          <Trophy size={22} />
+          <strong>记忆碎片</strong>
+          <span>掉落、徽章和小瞬间，都收在这里。</span>
         </Link>
-        <Link to="/diary" className="quick-card wide">
-          <BookOpen size={24} />
-          <span>旅行日记入口</span>
-          <small>把今日路线、心情和徽章整理成故事</small>
+        <Link to="/diary" className="soft-card home-entry-card home-entry-wide">
+          <BookOpen size={22} />
+          <strong>旅行手账</strong>
+          <span>把今天的路线、心情和风景整理成温柔的一页。</span>
         </Link>
-      </div>
-
-      <Link className="soft-banner" to="/chat">
-        <MessageCircle size={20} />
-        我现在有点不知道去哪，让搭子推荐下一站
-      </Link>
+      </section>
     </section>
   )
 }
