@@ -8,6 +8,15 @@ import VoiceButton from '../components/VoiceButton'
 import VoiceCallPanel from '../components/VoiceCallPanel'
 import { getMockPlaces, personas, sendChatMessage, tasks } from '../services/api'
 import { addMessage, addVisitedPlace, completeTask, getDemoState } from '../store/demoState'
+import { getInitialChatGreeting, shouldShowInitialGreeting } from '../utils/greetingHelpers'
+
+const personaDisplay = {
+  gentle_friend: { name: '温柔朋友型', avatar: '🧡' },
+  local_guide: { name: '本地向导型', avatar: '🧭' },
+  photo_buddy: { name: '摄影搭子型', avatar: '📷' },
+  budget_planner: { name: '省钱规划型', avatar: '☘️' },
+  game_sprite: { name: '城市精灵型', avatar: '✨' },
+}
 
 function ChatPage() {
   const [state, setState] = useState(getDemoState())
@@ -16,6 +25,9 @@ function ChatPage() {
   const [isSending, setIsSending] = useState(false)
   const [lastVoiceReply, setLastVoiceReply] = useState(null)
   const persona = useMemo(() => state.selectedPersona || personas[0], [state.selectedPersona])
+  const displayPersona = useMemo(() => ({ ...persona, ...(personaDisplay[persona.id] || {}) }), [persona])
+  const initialGreeting = useMemo(() => getInitialChatGreeting({ persona, places }), [persona, places])
+  const showInitialGreeting = useMemo(() => shouldShowInitialGreeting(state.messages), [state.messages])
   const activeTask = tasks[0]
 
   useEffect(() => {
@@ -62,27 +74,47 @@ function ChatPage() {
   }
 
   return (
-    <section className="page chat-page">
-      <header className="chat-header">
-        <span className="avatar-bubble">{persona.avatar}</span>
+    <section className="page chat-page companion-call-page">
+      <header className="chat-header call-header">
+        <span className="avatar-bubble">{displayPersona.avatar}</span>
         <div>
-          <p className="eyebrow">{persona.name}</p>
+          <p className="eyebrow">{displayPersona.name}</p>
           <h1>我在，慢慢说</h1>
         </div>
       </header>
 
-      <div className="chat-window">
-        {state.messages.map((message) => (
-          <ChatBubble key={message.id} message={message} />
-        ))}
-      </div>
+      {showInitialGreeting && (
+        <section className="chat-greeting-panel" aria-label="聊天欢迎语">
+          <p className="eyebrow">{initialGreeting.weatherHint}</p>
+          <h2>{initialGreeting.welcome}</h2>
+          <div className="suggestion-row">
+            {initialGreeting.suggestions.map((suggestion) => (
+              <button
+                key={suggestion}
+                type="button"
+                className="suggestion-chip"
+                onClick={() => sendMessage(suggestion)}
+                disabled={isSending}
+              >
+                {suggestion}
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
 
       <VoiceCallPanel
         isSending={isSending}
         lastReply={lastVoiceReply}
         onVoiceMessage={sendVoiceMessage}
-        persona={persona}
+        persona={displayPersona}
       />
+
+      <div className="chat-window call-transcript">
+        {state.messages.map((message) => (
+          <ChatBubble key={message.id} message={message} />
+        ))}
+      </div>
 
       <form
         className="composer"
@@ -91,24 +123,21 @@ function ChatPage() {
           sendMessage()
         }}
       >
-        <input value={text} onChange={(event) => setText(event.target.value)} placeholder="告诉搭子你现在的心情或位置" />
+        <input value={text} onChange={(event) => setText(event.target.value)} placeholder="也可以打字告诉搭子你的心情或位置" />
         <button type="submit" aria-label="发送">
           <Send size={19} />
         </button>
       </form>
 
       <div className="action-row">
-        <VoiceButton
-          label="说出当前位置"
-          onClick={() => sendMessage('我现在想找一个安心又有旅行感的下一站')}
-        />
+        <VoiceButton label="说出当前位置" onClick={() => sendMessage('我现在想找一个安心又有旅行感的下一站')} />
         <Link className="icon-link" to="/photo">
           <Camera size={18} />
-          拍照
+          寄照片
         </Link>
         <Link className="icon-link" to="/badges">
           <Trophy size={18} />
-          任务
+          碎片册
         </Link>
       </div>
 

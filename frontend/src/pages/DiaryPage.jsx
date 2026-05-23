@@ -15,11 +15,14 @@ function DiaryPage() {
   const unlocked = badges.filter((badge) => state.badges.includes(badge.id))
 
   return (
-    <section className="page">
-      <p className="eyebrow">旅行日记</p>
-      <h1>把今天收进一页里</h1>
+    <section className="page diary-page">
+      <div className="page-intro">
+        <p className="eyebrow">今日旅行手账</p>
+        <h1>把今天收进一页里</h1>
+        <p className="lead">路线、心情、徽章和小碎片，都可以变成一页柔软的旅行记录。</p>
+      </div>
 
-      <div className="summary-list">
+      <div className="summary-list journal-summary">
         <article>
           <MapPin size={20} />
           <div>
@@ -31,19 +34,19 @@ function DiaryPage() {
           <Trophy size={20} />
           <div>
             <h2>获得徽章</h2>
-            <p>{unlocked.length ? unlocked.map((badge) => badge.name).join('、') : '今天还没有解锁徽章'}</p>
+            <p>{unlocked.length ? `已收集 ${unlocked.length} 枚徽章` : '今天还没有解锁徽章'}</p>
           </div>
         </article>
         <article>
           <HeartPulse size={20} />
           <div>
             <h2>心情变化</h2>
-            <p>{state.moodHistory.map((item) => `${item.label}：${item.mood}`).join(' / ')}</p>
+            <p>{state.moodHistory.length ? state.moodHistory.map((item) => item.mood).join(' / ') : '慢慢出发，慢慢安定'}</p>
           </div>
         </article>
       </div>
 
-      <article className="diary-card">
+      <article className="diary-card journal-page-card">
         <BookOpen size={22} />
         <h2>{diary?.title || '正在整理今天的故事...'}</h2>
         <p>{diary?.content || '搭子正在把路线、徽章和心情整理成一段轻轻的旅行日记。'}</p>

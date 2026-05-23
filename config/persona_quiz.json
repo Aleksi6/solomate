@@ -1,0 +1,167 @@
+{
+  "title": "搭子风格小测试",
+  "subtitle": "四个轻轻的问题，帮你挑一位今天最合拍的旅行搭子。",
+  "questions": [
+    {
+      "id": "current_mood",
+      "title": "现在出门前，你最想先得到什么？",
+      "options": [
+        {
+          "id": "comfort",
+          "title": "一点点安心感",
+          "description": "有人陪我慢慢想，不急着做决定。",
+          "scores": {
+            "gentle_friend": 3,
+            "local_guide": 1
+          }
+        },
+        {
+          "id": "route",
+          "title": "清楚的下一站",
+          "description": "告诉我哪里好走、值得停一停。",
+          "scores": {
+            "local_guide": 3,
+            "budget_planner": 1
+          }
+        },
+        {
+          "id": "spark",
+          "title": "一点探索兴奋感",
+          "description": "把今天变成轻松的小任务。",
+          "scores": {
+            "game_sprite": 3,
+            "photo_buddy": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "travel_style",
+      "title": "你更喜欢怎样逛一座城市？",
+      "options": [
+        {
+          "id": "slow",
+          "title": "慢慢走，慢慢感受",
+          "description": "舒适和安全比打卡数量更重要。",
+          "scores": {
+            "gentle_friend": 2,
+            "local_guide": 1
+          }
+        },
+        {
+          "id": "camera",
+          "title": "找画面和光线",
+          "description": "想留下好看的街角和小瞬间。",
+          "scores": {
+            "photo_buddy": 3,
+            "game_sprite": 1
+          }
+        },
+        {
+          "id": "efficient",
+          "title": "少绕路，安排稳一点",
+          "description": "路线、预算、体力都想算得清楚。",
+          "scores": {
+            "budget_planner": 3,
+            "local_guide": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "help_type",
+      "title": "遇到选择困难时，你希望搭子怎么帮你？",
+      "options": [
+        {
+          "id": "listen",
+          "title": "先听我说完",
+          "description": "让我把犹豫说出来，再一起选。",
+          "scores": {
+            "gentle_friend": 3
+          }
+        },
+        {
+          "id": "compare",
+          "title": "直接列出利弊",
+          "description": "给我一个清楚、实用的判断。",
+          "scores": {
+            "budget_planner": 2,
+            "local_guide": 2
+          }
+        },
+        {
+          "id": "quest",
+          "title": "变成小挑战",
+          "description": "给我一个低压力、能完成的小目标。",
+          "scores": {
+            "game_sprite": 3
+          }
+        }
+      ]
+    },
+    {
+      "id": "memory_focus",
+      "title": "今天结束时，你最想留下什么？",
+      "options": [
+        {
+          "id": "diary",
+          "title": "一段被好好照顾的心情",
+          "description": "哪怕只是普通一天，也想被温柔记录。",
+          "scores": {
+            "gentle_friend": 2,
+            "budget_planner": 1
+          }
+        },
+        {
+          "id": "photo",
+          "title": "几张有旅行感的照片",
+          "description": "光线、街景和纪念物都想收进来。",
+          "scores": {
+            "photo_buddy": 3
+          }
+        },
+        {
+          "id": "badge",
+          "title": "一枚小成就",
+          "description": "今天也想解锁一点点进度。",
+          "scores": {
+            "game_sprite": 2,
+            "local_guide": 1
+          }
+        }
+      ]
+    }
+  ],
+  "results": {
+    "gentle_friend": {
+      "name": "温柔朋友型",
+      "tags": ["安心陪伴", "慢慢说", "低压力"],
+      "scenes": ["一个人有点紧张时", "想先整理心情时", "需要被温柔提醒安全时"],
+      "summary": "你今天适合一个会认真听你说话、陪你慢慢做决定的搭子。"
+    },
+    "local_guide": {
+      "name": "本地向导型",
+      "tags": ["路线感", "城市故事", "清楚建议"],
+      "scenes": ["想找下一站时", "想知道附近哪里值得去时", "需要安全路线建议时"],
+      "summary": "你今天适合一个懂路线、懂街区，也会帮你把选择讲清楚的搭子。"
+    },
+    "photo_buddy": {
+      "name": "摄影搭子型",
+      "tags": ["画面感", "拍照灵感", "旅行手账"],
+      "scenes": ["想拍好看的照片时", "想收集纪念物碎片时", "想记录城市细节时"],
+      "summary": "你今天适合一个会陪你找光线、角度和小画面的搭子。"
+    },
+    "budget_planner": {
+      "name": "省钱规划型",
+      "tags": ["省力省钱", "清晰利弊", "稳妥安排"],
+      "scenes": ["不想绕路时", "预算有限时", "想快速做决定时"],
+      "summary": "你今天适合一个能把路线、体力和预算都算清楚的搭子。"
+    },
+    "game_sprite": {
+      "name": "城市精灵型",
+      "tags": ["小任务", "轻游戏化", "成就感"],
+      "scenes": ["想让旅程更有趣时", "需要一点出发动力时", "想收集徽章和碎片时"],
+      "summary": "你今天适合一个把探索变成轻量任务、帮你解锁小成就的搭子。"
+    }
+  }
+}

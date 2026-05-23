@@ -1,0 +1,58 @@
+{
+  "environmentFirstDrop": {
+    "id": "drop-env-first-clear-air",
+    "type": "random_drop",
+    "rarity": "common",
+    "dropKind": "memory",
+    "title": "晴光路口碎片",
+    "description": "你把眼前的环境分享给 SoloMate 后，收下了一片明亮又安心的路口记忆。",
+    "location": "环境分享"
+  },
+  "souvenirFirstDrop": {
+    "id": "drop-souvenir-first-pocket-star",
+    "type": "random_drop",
+    "rarity": "rare",
+    "dropKind": "achievement",
+    "title": "口袋星光成就",
+    "description": "第一次把纪念物收进手账。今天的你，已经有了一枚可以随身带走的小星星。",
+    "location": "纪念物碎片"
+  },
+  "randomDrops": [
+    {
+      "id": "drop-warm-postmark",
+      "type": "random_drop",
+      "rarity": "common",
+      "dropKind": "memory",
+      "title": "温柔邮戳",
+      "description": "某个刚刚好的瞬间，被轻轻盖进今天的旅行册。",
+      "location": "旅途中"
+    },
+    {
+      "id": "drop-safe-route-badge",
+      "type": "task_badge",
+      "rarity": "rare",
+      "dropKind": "badge",
+      "title": "安心路线徽章",
+      "description": "你又一次优先选择了明亮、有人气的方向。SoloMate 悄悄给你记了一笔。",
+      "location": "城市探索"
+    },
+    {
+      "id": "drop-tiny-brave-achievement",
+      "type": "random_drop",
+      "rarity": "rare",
+      "dropKind": "achievement",
+      "title": "小小勇气成就",
+      "description": "一个人出发也很了不起。今天的勇气不是很大声，但它一直在。",
+      "location": "今日旅程"
+    },
+    {
+      "id": "drop-photo-note",
+      "type": "random_drop",
+      "rarity": "common",
+      "dropKind": "memory",
+      "title": "照片边角碎片",
+      "description": "照片没有说完的话，被留在了手账边角。",
+      "location": "相册里"
+    }
+  ]
+}
