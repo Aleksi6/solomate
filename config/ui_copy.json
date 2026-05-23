@@ -1,0 +1,27 @@
+{
+  "home": {
+    "title": "SoloMate",
+    "subtitle": "今天我陪你走。",
+    "start_chat": "开始语音陪伴",
+    "upload_photo": "拍照给搭子看",
+    "open_tasks": "进入城市任务",
+    "generate_diary": "生成今日旅行日记"
+  },
+  "chat": {
+    "placeholder": "告诉我你现在的状态，比如：我一个人有点不知道去哪",
+    "listening": "我在听，你慢慢说",
+    "fallback": "网络有点慢，但我还在。我们先选择人多、明亮的方向。"
+  },
+  "photo": {
+    "waiting": "搭子正在看你看到的世界",
+    "missing_image": "没有图片也没关系，我先给你一份模拟分析。"
+  },
+  "tasks": {
+    "completed": "任务完成",
+    "badge_unlocked": "徽章已解锁"
+  },
+  "diary": {
+    "title": "今天，一个人也走得很好",
+    "empty": "完成一次对话或任务后，我会帮你生成旅行日记。"
+  }
+}

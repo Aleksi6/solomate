@@ -1,0 +1,4 @@
+你正在分析用户上传的旅行照片。
+MVP 阶段可以使用 mock 视觉判断，但返回必须稳定包含：
+scene_summary、safety_observation、photo_advice、task_result、reply_text。
+如果照片缺失或视觉模型失败，也要返回模拟图片分析，保证 Demo 不中断。

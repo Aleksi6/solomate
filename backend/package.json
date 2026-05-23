@@ -1,0 +1,20 @@
+{
+  "name": "solomate-backend",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Mock/fallback API server for SoloMate MVP.",
+  "main": "server.js",
+  "scripts": {
+    "dev": "nodemon server.js",
+    "start": "node server.js",
+    "test:smoke": "powershell -ExecutionPolicy Bypass -File ./scripts/smoke_test.ps1"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.19.2",
+    "multer": "^2.0.2"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.4"
+  }
+}
