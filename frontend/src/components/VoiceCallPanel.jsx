@@ -1,56 +1,79 @@
 import { Mic, MicOff, Volume2, VolumeX } from 'lucide-react'
-import { useEffect, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import useSpeechRecognition from '../hooks/useSpeechRecognition'
 import useSpeechSynthesis from '../hooks/useSpeechSynthesis'
 import VoiceSettings from './VoiceSettings'
 
-function VoiceCallPanel({ isSending = false, lastReply, onVoiceMessage, persona }) {
+function VoiceCallPanel({ isSending = false, lastReply, onSendMessage, persona }) {
   const spokenReplyIdRef = useRef('')
+  const [transientPhase, setTransientPhase] = useState('idle')
   const speechSynthesis = useSpeechSynthesis()
   const speechRecognition = useSpeechRecognition({
-    onFinalTranscript: (text) => {
-      onVoiceMessage?.(text)
+    onFinalTranscript: async (text) => {
+      setTransientPhase('transcribing')
+
+      try {
+        await onSendMessage?.(text)
+        speechRecognition.resetTranscript()
+      } catch {
+        setTransientPhase('error')
+        return
+      }
+
+      setTransientPhase('idle')
     },
   })
 
   useEffect(() => {
-    if (!lastReply?.id || spokenReplyIdRef.current === lastReply.id) return
+    if (!lastReply?.id || spokenReplyIdRef.current === lastReply.id) {
+      return
+    }
+
     spokenReplyIdRef.current = lastReply.id
     speechSynthesis.speak(lastReply.text)
   }, [lastReply, speechSynthesis])
 
-  const panelState = (() => {
-    if (!speechRecognition.isSupported) return 'fallback'
-    if (speechRecognition.error) return 'fallback'
-    if (isSending) return 'thinking'
+  const voicePhase = useMemo(() => {
+    if (!speechRecognition.isSupported) return 'error'
+    if (speechRecognition.error || transientPhase === 'error') return 'error'
     if (speechRecognition.isListening) return 'listening'
+    if (transientPhase === 'transcribing') return 'transcribing'
+    if (isSending) return 'sending'
     if (speechSynthesis.isSpeaking) return 'speaking'
     return 'idle'
-  })()
+  }, [
+    isSending,
+    speechRecognition.error,
+    speechRecognition.isListening,
+    speechRecognition.isSupported,
+    speechSynthesis.isSpeaking,
+    transientPhase,
+  ])
 
   const statusText = (() => {
-    if (!speechRecognition.isSupported) return '当前浏览器不支持语音识别，文字输入仍然可用'
-    if (speechRecognition.error) return '识别有点不稳定，先用文字输入也没关系'
-    if (isSending) return '搭子正在想一个更适合你的下一步'
-    if (speechRecognition.isListening) return '我在听，你慢慢说'
-    if (speechSynthesis.isSpeaking) return '我陪你说完这段路'
-    return '我陪你说完这段路'
+    if (!speechRecognition.isSupported) return '当前浏览器不支持语音识别，可以直接输入文字。'
+    if (speechRecognition.error) return '这次没有听清，我们继续用文字也完全没问题。'
+    if (voicePhase === 'transcribing') return '我先把你刚才的话整理成文字。'
+    if (voicePhase === 'sending') return '我正在根据你的状态准备回复。'
+    if (voicePhase === 'listening') return '我在听，你慢慢说。'
+    if (voicePhase === 'speaking') return '我正在把这段回复读给你听。'
+    return '点一下麦克风，我们就可以开始这段陪伴对话。'
   })()
 
   const subText = speechRecognition.transcript
     ? speechRecognition.transcript
-    : lastReply?.text || '点击麦克风，开始这一轮陪伴通话'
+    : lastReply?.text || '点一下麦克风，开始这一轮语音陪伴。'
 
   return (
     <section className="voice-call-panel call-stage-panel" aria-label="陪伴通话面板">
       <div className="call-stage-top">
         <p className="eyebrow">陪伴通话</p>
-        <span className={`call-state-chip is-${panelState}`}>{statusText}</span>
+        <span className={`call-state-chip is-${voicePhase}`}>{statusText}</span>
       </div>
 
       <div className="call-stage-center">
-        <div className={`voice-orb voice-wave call-voice-orb is-${panelState}`} aria-hidden="true">
-          <span>{persona?.avatar || '✨'}</span>
+        <div className={`voice-orb voice-wave call-voice-orb is-${voicePhase}`} aria-hidden="true">
+          <span>{persona?.avatar || '旅'}</span>
         </div>
         <div className="call-stage-copy">
           <h2>{persona?.name || 'SoloMate'}</h2>
@@ -82,11 +105,7 @@ function VoiceCallPanel({ isSending = false, lastReply, onVoiceMessage, persona 
         </button>
       </div>
 
-      <VoiceSettings
-        settings={speechSynthesis.settings}
-        voices={speechSynthesis.voices}
-        onChange={speechSynthesis.updateSettings}
-      />
+      <VoiceSettings settings={speechSynthesis.settings} voices={speechSynthesis.voices} onChange={speechSynthesis.updateSettings} />
     </section>
   )
 }

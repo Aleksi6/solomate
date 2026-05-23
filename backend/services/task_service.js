@@ -7,7 +7,8 @@ const unlockedBadges = new Set();
 const DEFAULT_TASK = {
   id: "firework_photo_task",
   title: "烟火气打卡",
-  reward_badge: "城市烟火徽章"
+  reward_badge: "城市烟火徽章",
+  requirements: ["店铺", "灯光", "人流", "招牌", "小吃摊"]
 };
 
 function getTasks() {

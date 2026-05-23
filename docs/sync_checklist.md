@@ -14,6 +14,13 @@
 - [ ] `LLM_ENABLE=true` 时，若模型失败、超时、返回非 JSON 或字段缺失，接口仍会自动 fallback。
 - [ ] 前端不需要因为启用 LLM 改动任何字段映射。
 
+## Vision / Voice
+
+- [ ] `VISION_ENABLE=false` 时，`/api/analyze-photo` 仍返回标准 JSON。
+- [ ] 浏览器不支持语音识别时，前端仍保留文本输入。
+- [ ] 浏览器不支持 TTS 时，前端仍展示文字回复。
+- [ ] `/api/voice-status` 返回浏览器 ASR/TTS 推荐信息。
+
 ## 配置 ID
 
 - [ ] `persona_id` 与 `config/personas.json` 一致，默认 `gentle_friend`。

@@ -6,20 +6,19 @@ const getRecognitionConstructor = () => {
 }
 
 function useSpeechRecognition({ onFinalTranscript } = {}) {
+  const Recognition = getRecognitionConstructor()
   const recognitionRef = useRef(null)
   const onFinalTranscriptRef = useRef(onFinalTranscript)
   const [isListening, setIsListening] = useState(false)
   const [transcript, setTranscript] = useState('')
   const [error, setError] = useState('')
-  const [isSupported, setIsSupported] = useState(false)
+  const isSupported = Boolean(Recognition)
 
   useEffect(() => {
     onFinalTranscriptRef.current = onFinalTranscript
   }, [onFinalTranscript])
 
   useEffect(() => {
-    const Recognition = getRecognitionConstructor()
-    setIsSupported(Boolean(Recognition))
     if (!Recognition) return undefined
 
     const recognition = new Recognition()
@@ -74,7 +73,7 @@ function useSpeechRecognition({ onFinalTranscript } = {}) {
       recognition.stop()
       recognitionRef.current = null
     }
-  }, [])
+  }, [Recognition])
 
   const startListening = useCallback(() => {
     if (!recognitionRef.current) {

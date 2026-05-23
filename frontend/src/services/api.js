@@ -1,45 +1,45 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:3001"
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001'
 const REQUEST_TIMEOUT_MS = 5000
 
 export const personas = [
   {
     id: 'gentle_friend',
     name: '温柔朋友型',
-    tagline: '陪你聊天，提醒安全',
-    avatar: '🌤️',
+    tagline: '陪你聊天，也提醒你照顾自己。',
+    avatar: '旅',
     tone: '温柔、自然、像朋友',
     openingLine: '今天我陪你走，不用急，我们慢慢来。',
   },
   {
     id: 'local_guide',
     name: '本地向导型',
-    tagline: '讲故事，推荐路线',
-    avatar: '🧭',
+    tagline: '讲故事，也帮你选更安心的路线。',
+    avatar: '城',
     tone: '亲切、清楚、懂城市',
-    openingLine: '我来当你的本地向导，边走边讲这座城。',
+    openingLine: '我来当你的本地向导，边走边给你讲这座城。',
   },
   {
     id: 'photo_buddy',
     name: '摄影搭子型',
-    tagline: '找角度，写文案',
-    avatar: '📷',
-    tone: '审美、鼓励、轻松',
+    tagline: '一起找光线、角度和旅行感画面。',
+    avatar: '拍',
+    tone: '有审美、会鼓励、轻松自然',
     openingLine: '看到好看的地方就拍给我，我帮你找画面。',
   },
   {
     id: 'budget_planner',
     name: '省钱规划型',
-    tagline: '少绕路，控预算',
-    avatar: '☕',
+    tagline: '少绕路，帮你把预算和体力算清楚。',
+    avatar: '省',
     tone: '实用、清楚、低废话',
     openingLine: '我帮你把时间、体力和预算安排得更划算。',
   },
   {
     id: 'game_sprite',
     name: '城市精灵型',
-    tagline: '发任务，解锁徽章',
-    avatar: '✨',
-    tone: '活泼、有任务感',
+    tagline: '发任务，解锁徽章。',
+    avatar: '星',
+    tone: '活泼、有任务感，但不过度幼稚',
     openingLine: '城市探索任务开启，今天先解锁第一枚徽章。',
   },
 ]
@@ -89,8 +89,9 @@ const mockPlaces = [
     type: 'food',
     distance: 600,
     safety_level: 'high',
+    safety: '高',
     tags: ['吃饭', '人多', '夜间安全', '烟火气'],
-    description: '适合单人旅行者吃饭和短暂停留，人流较多，夜间相对安心。',
+    description: '适合一个人慢慢逛、吃点东西、观察城市烟火气。',
     task_id: 'firework_photo_task',
   },
   {
@@ -99,9 +100,21 @@ const mockPlaces = [
     type: 'culture',
     distance: 850,
     safety_level: 'medium',
+    safety: '中',
     tags: ['拍照', '文化', '散步', '街景'],
-    description: '适合白天或傍晚慢慢逛，可以拍到有城市记忆感的街景。',
+    description: '适合傍晚慢慢逛，可以拍到有城市记忆感的街景。',
     task_id: 'firework_photo_task',
+  },
+  {
+    id: 'coffee_stop',
+    name: '街角咖啡店',
+    type: 'rest',
+    distance: 400,
+    safety_level: 'high',
+    safety: '高',
+    tags: ['休息', '喝咖啡', '短暂停留'],
+    description: '适合先坐下来缓一会儿，再决定下一步去哪。',
+    task_id: '',
   },
   {
     id: 'riverside',
@@ -109,46 +122,60 @@ const mockPlaces = [
     type: 'view',
     distance: 1200,
     safety_level: 'medium',
+    safety: '中',
     tags: ['风景', '散步', '夜景'],
-    description: '风景好，但夜间单人前往需要注意人流和照明情况。',
+    description: '风景不错，但夜间独自前往时还是要留意人流和照明。',
     task_id: 'safe_route_task',
   },
 ]
 
-const mockChatResponse = {
-  reply_text:
-    '没关系，我陪你。你现在一个人出行，可以先去人多、灯光亮的夜市街区，短暂停留一下再决定下一站。',
-  reply_type: 'comfort_decision',
-  emotion_detected: 'uncertain',
-  suggested_action: 'go_to_night_market',
-  safety_tip: '夜间单人出行建议优先选择主路和人流较多的区域。',
-  next_options: ['去夜市', '找咖啡店休息', '回酒店'],
-  task_triggered: 'firework_photo_task',
-}
-
 const mockPhotoResponse = {
-  scene_summary: '画面中有街道、灯光和生活气息，接近城市夜间街区场景。',
-  safety_observation: '从画面看，灯光较明显，适合短暂停留；夜间单人出行仍建议靠近主路和人流较多区域。',
-  photo_advice: '可以把灯光、招牌和街道线条放进画面，让城市烟火气更明显。',
+  scene_summary: '画面里有街道、灯光和旅行氛围，适合作为这次行程的照片记录。',
+  safety_observation: '单人出行时更适合停留在明亮、开放、容易求助的区域。',
+  photo_advice: '可以把灯光、招牌和街道层次放进画面，让旅行感更完整。',
   task_result: {
     passed: true,
     reward_badge: '城市烟火徽章',
-    reason: '照片包含城市街区和生活氛围，符合烟火气打卡要求。',
+    reason: '照片包含城市街区和生活氛围，符合烟火气打卡的要求。',
   },
-  reply_text: '我看到了你眼前的城市烟火气，这张照片可以完成任务，城市烟火徽章已解锁。',
+  reply_text: '我看到你眼前的旅行场景了，这张照片可以作为任务和日记素材。',
 }
 
 const mockDiaryResponse = {
-  diary:
-    '今天你一个人走过了老街入口和夜市街区。一开始你有点犹豫，但后来你完成了烟火气打卡，也慢慢放松下来。你解锁了城市烟火徽章。这不是一次孤单的旅行，而是一次属于自己的探索。',
+  diary: '今天你一个人走过了老街入口和夜市街区。起初有一点犹豫，但你还是慢慢做出了下一步选择，也把这趟旅程认真记录了下来。',
   share_caption: '一个人的旅行，也会遇到刚刚好的热闹。',
-  route_summary: '今日路线：老街入口 → 夜市街区。完成任务：烟火气打卡。获得徽章：城市烟火徽章。',
-  summary_tags: ['单人旅行', '夜市', '烟火气'],
+  summary_tags: ['单人旅行', 'AI搭子', '城市探索'],
 }
 
 const mockCompleteTaskResponse = {
   completed_tasks: ['firework_photo_task'],
   badges: ['城市烟火徽章'],
+}
+
+const mockLlmStatus = {
+  llm_enable: false,
+  provider: 'openai_compatible',
+  has_api_key: false,
+  has_base_url: false,
+  has_model: false,
+  model: '',
+  timeout_ms: 8000,
+}
+
+const mockVisionStatus = {
+  vision_enable: false,
+  provider: '',
+  has_api_key: false,
+  has_base_url: false,
+  has_model: false,
+  model: '',
+  timeout_ms: 10000,
+}
+
+const mockVoiceStatus = {
+  browser_asr_recommended: true,
+  backend_asr_enabled: false,
+  tts_recommended: 'browser_speech_synthesis',
 }
 
 const withJsonHeaders = (options = {}) => ({
@@ -159,8 +186,279 @@ const withJsonHeaders = (options = {}) => ({
   },
 })
 
+const cleanPlaceCandidate = (value = '') => {
+  let place = String(value || '').trim()
+  if (!place) return ''
+
+  place = place.split(/[\s，。？！!?,、\n]/)[0] || ''
+  place = place.replace(/^(那个|这个|这家|这里的|那边的|从这里|从那边)/, '')
+  place = place.replace(/(啊|呀|呢|了|吧|嘛|哦|呐)+$/g, '')
+  place = place.replace(/(玩|逛|看看|看一看|拍照|打卡|吃饭|喝咖啡|喝点东西)+$/g, '')
+  place = place.replace(/(附近|周边)+$/g, '')
+  return place.trim()
+}
+
+const extractExplicitPlace = (userText = '') => {
+  const text = String(userText || '').trim()
+  if (!text) return ''
+
+  const patterns = [
+    /(?:我又想去|我想去|我要去|准备去|想去)([^，。？！!?,、\s\n]{1,16})/,
+    /(?:去)([^，。？！!?,、\s\n]{1,16})(?:玩|逛|看看|打卡)?/,
+    /(?:到)([^，。？！!?,、\s\n]{1,16})了/,
+    /(?:我在)([^，。？！!?,、\s\n]{1,16})/,
+    /(?:想找|想吃|想喝)([^，。？！!?,、\s\n]{1,16})/,
+  ]
+
+  for (const pattern of patterns) {
+    const match = text.match(pattern)
+    const place = cleanPlaceCandidate(match?.[1] || '')
+    if (place) return place
+  }
+
+  return ''
+}
+
+const extractRouteIntent = (userText = '', conversationState = {}) => {
+  const text = String(userText || '').trim()
+  const fallbackTarget = cleanPlaceCandidate(
+    conversationState.target_place || conversationState.current_place || conversationState.last_place || '',
+  )
+
+  const fullPatterns = [
+    /(?:怎么|如何)?从([^，。？！!?,、\s\n]{1,16})去([^，。？！!?,、\s\n]{1,16})/,
+    /([^，。？！!?,、\s\n]{1,16})到([^，。？！!?,、\s\n]{1,16})(?:怎么走|怎么去|怎么过去|路线|咋走|咋去)/,
+  ]
+
+  for (const pattern of fullPatterns) {
+    const match = text.match(pattern)
+    const originPlace = cleanPlaceCandidate(match?.[1] || '')
+    const targetPlace = cleanPlaceCandidate(match?.[2] || '')
+    if (originPlace || targetPlace) {
+      return { origin_place: originPlace, target_place: targetPlace, is_route_question: true }
+    }
+  }
+
+  const originOnlyMatch = text.match(/(?:怎么|如何)?从([^，。？！!?,、\s\n]{1,16})去(?:呢|呀|啊|嘛)?$/)
+  if (originOnlyMatch) {
+    return {
+      origin_place: cleanPlaceCandidate(originOnlyMatch[1] || ''),
+      target_place: fallbackTarget,
+      is_route_question: true,
+    }
+  }
+
+  if (/从这里去|怎么从这里去|怎么去那里|怎么过去|怎么去|怎么走|回酒店|回去/.test(text)) {
+    return {
+      origin_place: cleanPlaceCandidate(
+        conversationState.current_place || conversationState.origin_place || conversationState.live_context?.place_name || '',
+      ),
+      target_place: fallbackTarget,
+      is_route_question: true,
+    }
+  }
+
+  return { origin_place: '', target_place: '', is_route_question: false }
+}
+
+const detectIntent = (userText = '', explicitPlace = '', routeInfo = {}) => {
+  const text = String(userText || '')
+  if (/你怎么知道|定位|位置怎么来的|你有我定位/.test(text)) return 'identity'
+  if (/危险|害怕|不安全|有人跟着|迷路|救命/.test(text)) return 'safety'
+  if (/我的位置|我在哪|我现在在哪|现在在哪/.test(text)) return 'location_status'
+  if (/现在几点|几点了|现在几号|今天几号|几点啦/.test(text)) return 'time'
+  if (routeInfo.is_route_question || /怎么去|怎么走|怎么从|从哪里去|从.+到.+|过去|回酒店|回去/.test(text)) return 'route'
+  if (/天气|下雨|冷不冷|热不热|带伞|防晒|穿什么|我要出门/.test(text)) return 'weather'
+  if (/有什么故事|有什么来历|为什么有名|历史|典故/.test(text)) return 'story'
+  if (/有啥好吃的|有什么好吃的|吃什么|想吃|餐厅|小吃|夜宵|火锅|咖啡|喝点什么/.test(text)) return 'food'
+  if (/哪里好拍照|哪儿好拍|怎么拍|拍哪里|机位|角度|出片|打卡照|拍照|照片|好拍吗/.test(text)) return 'photo'
+  if (/好多人|人好多|太挤|排队|人山人海|热闹/.test(text)) return 'crowd'
+  if (explicitPlace) return 'place_specific'
+  if (/任务|徽章|打卡|解锁/.test(text)) return 'game'
+  if (/不知道去哪|附近有什么|推荐一下|去哪里|想去玩|我要去玩/.test(text)) return 'decision'
+  if (/你好|嗨|hello|hi|在吗/.test(text)) return 'greeting'
+  return 'chat'
+}
+
+const buildMockChatResponse = (payload = {}) => {
+  const userText = String(payload.user_text || '').trim()
+  const conversationState = payload.conversation_state || {}
+  const routeInfo = extractRouteIntent(userText, conversationState)
+  const explicitPlace = extractExplicitPlace(userText)
+  const effectivePlace =
+    routeInfo.target_place ||
+    explicitPlace ||
+    conversationState.target_place ||
+    conversationState.current_place ||
+    conversationState.last_place ||
+    conversationState.live_context?.place_name ||
+    ''
+  const intent = detectIntent(userText, explicitPlace, routeInfo)
+  const weather = conversationState.live_context?.weather || payload.live_context?.weather || {}
+  const timeOfDay = conversationState.live_context?.time_of_day || payload.live_context?.time_of_day || ''
+
+  if (intent === 'identity') {
+    return {
+      reply_text: '我不会私下获取你的定位，只能看到 App 主动传来的位置字段，或者 Demo 里的模拟位置。',
+      reply_type: 'identity_explain',
+      emotion_detected: 'uncertain',
+      suggested_action: 'clarify_location_source',
+      safety_tip: '如果你不想用定位，也可以直接用文字告诉我你大概在哪。',
+      next_options: ['继续聊附近建议', '只用文字描述位置', '换个地方问问'],
+      task_triggered: '',
+    }
+  }
+
+  if (intent === 'location_status') {
+    const currentPlace = conversationState.current_place || conversationState.live_context?.place_name || payload.live_context?.place_name || ''
+    const currentCity = conversationState.current_city || conversationState.live_context?.city || payload.live_context?.city || ''
+    const source = conversationState.live_context?.source || payload.live_context?.source || 'mock'
+    const locationLine =
+      source === 'browser'
+        ? `我当前拿到的实时位置是${currentCity || ''}${currentPlace || ''}。`
+        : `我现在没有拿到你设备的实时定位，只能先按${currentCity || ''}${currentPlace || '模拟位置'}来陪你判断。`
+
+    return {
+      reply_text: locationLine,
+      reply_type: 'location_status',
+      emotion_detected: 'uncertain',
+      suggested_action: 'clarify_location_source',
+      safety_tip: source === 'browser' ? '如果你移动了位置，可以再发一句“说出当前位置”，我会按新的位置继续。' : '如果你愿意开定位或直接用文字告诉我你在哪，我就能接得更准。',
+      next_options: ['说出当前位置', '附近有什么', '我想去别的地方'],
+      task_triggered: '',
+    }
+  }
+
+  if (intent === 'time') {
+    const localTime = conversationState.live_context?.local_time || payload.live_context?.local_time || ''
+    const date = localTime ? new Date(localTime) : new Date()
+    const timeText = Number.isNaN(date.getTime())
+      ? '我现在拿到的是你这边的本地时间。'
+      : `你这边现在大概是${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}。`
+
+    return {
+      reply_text: `${timeText}${date.getHours() < 5 ? '已经很晚了，出门的话尽量走主路。' : ''}`,
+      reply_type: 'time_status',
+      emotion_detected: 'uncertain',
+      suggested_action: 'check_time_context',
+      safety_tip: date.getHours() < 5 ? '这个时段一个人出门，优先明亮、人流稳定的地方。' : '',
+      next_options: ['我要出门', '附近有什么', '有啥好吃的'],
+      task_triggered: '',
+    }
+  }
+
+  if (intent === 'route' && routeInfo.origin_place && effectivePlace) {
+    return {
+      reply_text: `从${routeInfo.origin_place}去${effectivePlace}的话，我们先按大方向判断：优先看公共交通或打车到核心区域，再步行到目的地。具体路线到现场再用地图确认就好，我先帮你把思路理顺。`,
+      reply_type: 'route_advice',
+      emotion_detected: 'uncertain',
+      suggested_action: 'plan_route',
+      safety_tip: '如果已经是晚上，尽量把换乘次数和步行距离都压短一点。',
+      next_options: ['先看省力路线', '先看预算路线', '先看到站后怎么走'],
+      task_triggered: '',
+    }
+  }
+
+  if (intent === 'weather') {
+    const rainProbability = Number(weather.rain_probability)
+    const uvIndex = Number(weather.uv_index)
+    const weatherLine =
+      rainProbability >= 60
+        ? '这会儿雨概率偏高，出门记得带伞。'
+        : uvIndex >= 6
+          ? '紫外线不低，出门记得防晒和补水。'
+          : timeOfDay === 'night'
+            ? '如果现在出门，优先走主路，别拐太偏。'
+            : '我先按当前模拟天气提醒你，出门可以走轻便一点。'
+
+    return {
+      reply_text: `我先按当前模拟天气提醒你。${weatherLine}`,
+      reply_type: 'weather_advice',
+      emotion_detected: 'uncertain',
+      suggested_action: 'check_weather_and_prepare',
+      safety_tip: weatherLine,
+      next_options: ['我要出门', '附近有什么能躲雨', '现在适合去哪'],
+      task_triggered: '',
+    }
+  }
+
+  if (intent === 'food' && effectivePlace) {
+    return {
+      reply_text: `${effectivePlace}附近可以优先找人多、评价稳定、翻台快的小吃或餐馆。你想吃正餐还是小吃？我可以按省力路线帮你挑。`,
+      reply_type: 'food_advice',
+      emotion_detected: 'uncertain',
+      suggested_action: 'find_food_nearby',
+      safety_tip: timeOfDay === 'night' ? '夜里找吃的别走太偏，优先亮一点、进出方便的店。' : '一个人找吃的时，优先选明亮、开阔、进出方便的店。',
+      next_options: ['想吃正餐', '想吃小吃', '想喝点东西'],
+      task_triggered: '',
+    }
+  }
+
+  if (intent === 'story' && effectivePlace) {
+    return {
+      reply_text: `像${effectivePlace}这种地方，故事往往不只在资料里，也在它怎么被一代代人反复经过、拍照、告别和重逢里。你要是想听，我可以先从它为什么会变成城市记忆点这个角度陪你聊。`,
+      reply_type: 'story_share',
+      emotion_detected: 'relaxed',
+      suggested_action: 'share_place_story',
+      safety_tip: '',
+      next_options: ['讲讲它的来历', '讲讲适合什么时候去', '讲讲附近怎么逛'],
+      task_triggered: '',
+    }
+  }
+
+  if (intent === 'photo' && effectivePlace) {
+    return {
+      reply_text: `${effectivePlace}如果想拍得更出片，先别急着站最热门的正面机位，找侧一点、层次更开的角度。把灯光、路面引导线或者一点人流带进画面，会更有旅行现场感。`,
+      reply_type: 'photo_advice',
+      emotion_detected: 'uncertain',
+      suggested_action: 'look_for_photo_spot',
+      safety_tip: '拍照前先确认脚下和身后，别为了构图退到太边上。',
+      next_options: ['换个角度试试', '找侧面灯光', '先避开最挤的位置'],
+      task_triggered: 'firework_photo_task',
+    }
+  }
+
+  if (intent === 'crowd' && effectivePlace) {
+    return {
+      reply_text: `${effectivePlace}如果人太多，我们先别硬挤最中心。可以先靠边走、找亮一点的位置缓一缓，等一波人流过去再决定继续逛还是换个角度。`,
+      reply_type: 'crowd_support',
+      emotion_detected: 'uncertain',
+      suggested_action: 'avoid_crowded_spot',
+      safety_tip: '人挤的时候尽量把手机和包放在身前，也别站在台阶口停太久。',
+      next_options: ['先靠边缓一下', '换个方向逛', '找个亮一点的休息点'],
+      task_triggered: '',
+    }
+  }
+
+  if (intent === 'place_specific' && effectivePlace) {
+    return {
+      reply_text: `好，那我们先把目标切到${effectivePlace}。这轮就围绕${effectivePlace}继续，不用再从头交代。`,
+      reply_type: 'place_specific',
+      emotion_detected: 'uncertain',
+      suggested_action: 'continue_place_plan',
+      safety_tip: '边走边看时尽量站在更亮、更开阔的位置停留。',
+      next_options: ['问拍照点', '问吃什么', '问怎么去'],
+      task_triggered: '',
+    }
+  }
+
+  return {
+    reply_text: effectivePlace
+      ? `我知道我们现在聊的是${effectivePlace}。你想先解决路线、吃饭、拍照，还是今晚怎么走得更安心？`
+      : '我在。你可以告诉我你现在在哪、想去哪，或者眼下最想解决什么，我陪你把下一步慢慢理清楚。',
+    reply_type: 'small_talk',
+    emotion_detected: 'neutral',
+    suggested_action: '',
+    safety_tip: '',
+    next_options: ['附近有什么', '有啥好吃的', '哪里好拍照'],
+    task_triggered: '',
+  }
+}
+
 export const safeFetch = async (path, options = {}, mockData) => {
-  if (!API_BASE_URL) return mockData
+  if (!API_BASE_URL) {
+    return typeof mockData === 'function' ? mockData() : mockData
+  }
 
   const controller = new AbortController()
   const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
@@ -171,16 +469,22 @@ export const safeFetch = async (path, options = {}, mockData) => {
       signal: controller.signal,
     })
 
-    if (!response.ok) return mockData
+    if (!response.ok) {
+      return typeof mockData === 'function' ? mockData() : mockData
+    }
+
     return await response.json()
   } catch {
-    return mockData
+    return typeof mockData === 'function' ? mockData() : mockData
   } finally {
     clearTimeout(timeoutId)
   }
 }
 
 export const getMockPlaces = async () => safeFetch('/api/mock-places', { method: 'GET' }, mockPlaces)
+export const getLlmStatus = async () => safeFetch('/api/llm-status', { method: 'GET' }, mockLlmStatus)
+export const getVisionStatus = async () => safeFetch('/api/vision-status', { method: 'GET' }, mockVisionStatus)
+export const getVoiceStatus = async () => safeFetch('/api/voice-status', { method: 'GET' }, mockVoiceStatus)
 
 export const sendChatMessage = async (payload) =>
   safeFetch(
@@ -189,7 +493,7 @@ export const sendChatMessage = async (payload) =>
       method: 'POST',
       body: JSON.stringify(payload),
     }),
-    mockChatResponse,
+    () => buildMockChatResponse(payload),
   )
 
 export const analyzePhoto = async (payload) =>

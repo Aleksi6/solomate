@@ -5,6 +5,7 @@ const chatRoutes = require("./routes/chat");
 const photoRoutes = require("./routes/photo");
 const diaryRoutes = require("./routes/diary");
 const placesRoutes = require("./routes/places");
+const statusRoutes = require("./routes/status");
 const { fallbackForPath } = require("./utils/fallback");
 
 const app = express();
@@ -27,6 +28,7 @@ app.use("/api", chatRoutes);
 app.use("/api", photoRoutes);
 app.use("/api", diaryRoutes);
 app.use("/api", placesRoutes);
+app.use("/api", statusRoutes);
 
 app.use((req, res) => {
   res.status(404).json({

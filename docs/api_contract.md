@@ -1,18 +1,10 @@
 # SoloMate API Contract
 
-当前后端支持两种运行模式：
-
-- `mock-fallback`：默认模式，不依赖真实 LLM，适合本地 Demo 与 smoke test。
-- `llm-adapter`：可选模式，只有在 `LLM_ENABLE=true` 且配置完整时才尝试调用 OpenAI-compatible 接口。
-
-无论是否启用真实 LLM，以下核心接口字段都 **不能变化**：
-
-- `/api/chat`
-- `/api/analyze-photo`
-- `/api/complete-task`
-- `/api/generate-diary`
-
-如果环境变量未配置、模型超时、接口失败、返回非 JSON 或字段缺失，后端必须自动回退到当前 mock/fallback，并继续返回标准 JSON。
+SoloMate 当前保持这些边界不变：
+- 不修改既有 `/api/chat` 返回字段名
+- 所有核心接口都保留 mock / fallback
+- P0 不新增数据库
+- 当前 Demo 会话主要保存在前端 `localStorage`
 
 基础地址：
 
@@ -26,91 +18,123 @@ http://localhost:3001
 VITE_API_BASE_URL=http://localhost:3001
 ```
 
-## LLM 配置
+## GET /api/health
 
-后端读取 `backend/.env`，示例见 `backend/.env.example`：
-
-```text
-LLM_PROVIDER=openai_compatible
-LLM_API_KEY=
-LLM_BASE_URL=
-LLM_MODEL=
-LLM_TIMEOUT_MS=8000
-LLM_ENABLE=false
+```json
+{
+  "status": "ok",
+  "service": "SoloMate mock backend",
+  "mode": "mock-fallback"
+}
 ```
-
-说明：
-
-- `LLM_ENABLE=false` 时完全使用 mock/fallback。
-- 只有 `LLM_ENABLE=true` 且 `LLM_API_KEY`、`LLM_BASE_URL`、`LLM_MODEL` 都存在时，才会尝试真实模型。
-- `LLM_BASE_URL` 支持两种写法：
-  - 基础 URL，例如 `https://api.example.com/v1`
-  - 完整 endpoint，例如 `https://api.example.com/v1/chat/completions`
-- 后端会自动按 OpenAI-compatible `POST /chat/completions` 风格请求。
-
-## Smoke Test
-
-在 `backend/` 目录运行：
-
-```powershell
-npm run test:smoke
-```
-
-或：
-
-```powershell
-npm run test:smoke:mock
-```
-
-该测试显式以 `LLM_ENABLE=false` 启动后端，验证 mock-fallback 仍然稳定。
-
-## 可选真实 LLM 测试
-
-1. 在 `backend/.env` 中填写：
-
-```text
-LLM_PROVIDER=openai_compatible
-LLM_API_KEY=your_key
-LLM_BASE_URL=https://your-provider.example/v1
-LLM_MODEL=your-model
-LLM_TIMEOUT_MS=8000
-LLM_ENABLE=true
-```
-
-2. 启动后端：
-
-```powershell
-cd backend
-npm run dev
-```
-
-3. 用现有 smoke 请求或前端主线验证接口。
-
-4. 如果真实 LLM 失败，接口仍会回退到 mock/fallback，字段不变。
-
-## 统一约定
-
-- 所有核心接口返回 JSON。
-- 前端不要依赖 `error/message` 作为正常响应。
-- 成员 B 可以继续按当前字段联调，不需要感知是否启用了真实 LLM。
 
 ## POST /api/chat
 
-用途：文本或语音转文字后发送给 SoloMate，返回陪伴回复、建议、安全提醒和任务触发。
+用途：
+- 文本聊天
+- 语音识别后的文本聊天
+- 多轮连续上下文承接
 
-请求字段：
+### 请求字段
 
 | 字段 | 类型 | 必填 | 说明 |
 |---|---|---:|---|
-| `user_text` | string | 否 | 用户输入文本 |
+| `conversation_id` | string | 否 | 前端使用 `solomate_conversation_id` 持久化当前会话 |
+| `user_text` | string | 是 | 当前用户输入 |
 | `persona_id` | string | 否 | 默认 `gentle_friend` |
-| `mode` | string | 否 | `chat`、`decision`、`safety`、`guide`、`photo`、`game` |
-| `location` | object | 否 | 缺失时使用 mock location |
-| `context` | object | 否 | 缺失时使用空对象 |
-| `nearby_places` | array | 否 | 缺失时使用 `config/mock_places.json` |
-| `history` | array | 否 | 最近对话历史，MVP 可为空 |
+| `mode` | string | 否 | 一般传 `chat` |
+| `location` | object | 否 | App 传入的位置；没有时允许后端使用 mock fallback |
+| `context` | object | 否 | 轻量上下文，如 `mood`、`travel_mode`、`local_time`、`time_of_day` |
+| `nearby_places` | array | 否 | 附近地点列表；没有时后端读取 `config/mock_places.json` |
+| `history` | array | 否 | 最近 12 条聊天记录，必须包含 user 和 assistant 消息 |
+| `conversation_state` | object | 否 | 前端持久化的轻量会话状态 |
+| `live_context` | object | 否 | 当前发送时的实时上下文快照 |
 
-响应字段，必须固定为：
+### history 格式
+
+前端每次请求只传最近 12 条：
+
+```json
+[
+  {
+    "role": "user",
+    "text": "我想去迪士尼",
+    "timestamp": "2026-05-24T12:00:00.000Z",
+    "persona_id": "gentle_friend"
+  },
+  {
+    "role": "assistant",
+    "text": "好，那我们这轮先围绕迪士尼继续。",
+    "timestamp": "2026-05-24T12:00:05.000Z",
+    "persona_id": "gentle_friend"
+  }
+]
+```
+
+### conversation_state 格式
+
+```json
+{
+  "current_city": "",
+  "current_place": "",
+  "origin_place": "",
+  "target_place": "",
+  "last_place": "",
+  "last_intent": "",
+  "last_user_goal": "",
+  "pending_question": "",
+  "mood": "",
+  "travel_mode": "solo",
+  "preferences": {
+    "crowd": "",
+    "pace": "",
+    "budget": "",
+    "food_preference": ""
+  },
+  "history_summary": "",
+  "visited_places": [],
+  "badges": [],
+  "live_context": {
+    "local_time": "",
+    "time_of_day": "",
+    "latitude": null,
+    "longitude": null,
+    "city": "",
+    "place_name": "",
+    "weather": {
+      "condition": "",
+      "temperature_c": null,
+      "rain_probability": null,
+      "uv_index": null,
+      "source": "mock"
+    },
+    "nearby_places": []
+  }
+}
+```
+
+### live_context 格式
+
+```json
+{
+  "local_time": "2026-05-24T19:30:00.000Z",
+  "time_of_day": "night",
+  "latitude": 30.25,
+  "longitude": 120.15,
+  "city": "杭州",
+  "place_name": "西湖附近",
+  "weather": {
+    "condition": "rain",
+    "temperature_c": 19,
+    "rain_probability": 80,
+    "uv_index": 0,
+    "source": "mock"
+  },
+  "nearby_places": []
+}
+```
+
+### 返回字段
 
 ```json
 {
@@ -124,50 +148,56 @@ npm run dev
 }
 ```
 
-成员 B 映射：
+### 上下文机制
 
-| 后端字段 | 前端展示 |
-|---|---|
-| `reply_text` | AI 回复气泡 |
-| `reply_type` | 回复类型或状态标签 |
-| `emotion_detected` | 心情标签 |
-| `suggested_action` | 推荐动作 |
-| `safety_tip` | 安全提醒卡片 |
-| `next_options` | 下一步按钮 |
-| `task_triggered` | 任务卡片 |
+- 前端使用 `localStorage` 保存：
+  - `solomate_conversation_id`
+  - `solomate_chat_messages`
+  - `solomate_conversation_state`
+- 每次 `/api/chat` 都会带最近 12 条 `history`
+- 文字输入、语音输入、快捷按钮、语音面板共用同一个 `sendMessage(userText, options = {})`
+- 后端按 `user_text > conversation_state > history > location > mock` 解析当前 `effective_place`
+- 后端会同时解析：
+  - `target_place`
+  - `origin_place`
+  - `current_place`
+  - `detected_intent`
+  - `user_goal`
+  - `live_context`
+- 当用户说了新地点时，会承认上下文切换
+- 当用户只追问“哪里好拍照 / 有啥好吃的 / 怎么从这里去”时，会默认承接当前主题地点
+- 默认 mock location 只作兜底，不会污染用户明确说的新地点
+
+### 为什么暂不加数据库
+
+- P0 Demo 阶段，`localStorage + history payload + conversation_state + live_context` 已足够支撑连续聊天体验
+- 这样可以保持黑客松版本轻量、稳定、方便快速复现
+- 数据库作为 P1 可扩展项
+- 后续可以用 SQLite 保存 `conversation_id / messages / summary`
+
+## 实时能力边界
+
+P0 已实现：
+- 时间：真实，由前端发送 `local_time` 和 `time_of_day`
+- 浏览器位置：可选获取，失败时 fallback 到 mock
+- 附近地点：使用 `config/mock_places.json`
+- 路线：提供文字思路，不做真实导航
+
+P1 可扩展：
+- 天气：支持 `WEATHER_ENABLE` 开关；当前默认 mock/fallback，后续可接真实天气服务
+- Places：后续可接 Places API 做更真实的附近地点排序
+- SQLite 会话存储
+
+P2 仅概念：
+- 打车建议可以作为文案思路存在，但不调用真实打车平台
 
 ## GET /api/mock-places
 
-用途：读取 `config/mock_places.json`，返回模拟附近地点。
-
-响应字段：
-
-| 字段 | 类型 | 前端展示 |
-|---|---|---|
-| `id` | string | 地点 ID |
-| `name` | string | `PlaceCard` 标题 |
-| `type` | string | 地点类型 |
-| `distance` | number | 距离标签 |
-| `safety_level` | string | 安全等级标签 |
-| `tags` | array | 标签组 |
-| `description` | string | 推荐理由 |
-| `task_id` | string | 可触发任务 |
+返回 mock 地点列表，前端地点卡片和聊天建议都可以复用。
 
 ## POST /api/analyze-photo
 
-用途：分析照片，当前仍然保持 mock 视觉逻辑，不接真实视觉模型。
-
-请求字段：
-
-| 字段 | 类型 | 必填 | 说明 |
-|---|---|---:|---|
-| `image` | file | 否 | `multipart/form-data` 图片字段 |
-| `persona_id` | string | 否 | 当前搭子人格 |
-| `task_id` | string | 否 | 默认 `firework_photo_task` |
-| `location` | string/object | 否 | 当前地点 |
-| `user_question` | string | 否 | 用户对照片的提问 |
-
-响应字段固定为：
+### 返回字段
 
 ```json
 {
@@ -183,30 +213,9 @@ npm run dev
 }
 ```
 
-成员 B 映射：
-
-| 后端字段 | 前端展示 |
-|---|---|
-| `scene_summary` | 场景理解卡片 |
-| `safety_observation` | 安全观察卡片 |
-| `photo_advice` | 拍照建议卡片 |
-| `task_result.passed` | 任务完成状态 |
-| `task_result.reward_badge` | 徽章弹窗 |
-| `task_result.reason` | 完成原因 |
-| `reply_text` | 搭子回应气泡 |
-
 ## POST /api/complete-task
 
-用途：根据任务结果返回已完成任务和徽章。
-
-请求字段：
-
-| 字段 | 类型 | 必填 | 说明 |
-|---|---|---:|---|
-| `task_id` | string | 否 | 默认 `firework_photo_task` |
-| `passed` | boolean | 否 | 缺失默认 `true` |
-
-响应字段固定为：
+### 返回字段
 
 ```json
 {
@@ -215,27 +224,9 @@ npm run dev
 }
 ```
 
-成员 B 映射：
-
-| 后端字段 | 前端展示 |
-|---|---|
-| `completed_tasks` | 已完成任务列表 |
-| `badges` | 已解锁徽章列表 |
-
 ## POST /api/generate-diary
 
-用途：生成旅行日记。当前默认走 mock/fallback；启用 LLM 后可优化文案，但字段不变。
-
-请求字段：
-
-| 字段 | 类型 | 必填 | fallback |
-|---|---|---:|---|
-| `visited_places` | array | 否 | `["老街入口", "夜市街区"]` |
-| `badges` | array | 否 | `["城市烟火徽章"]` |
-| `mood_history` | array | 否 | `["uncertain", "relaxed"]` |
-| `chat_summary` | string | 否 | 空摘要 |
-
-响应字段固定为：
+### 返回字段
 
 ```json
 {
@@ -245,20 +236,22 @@ npm run dev
 }
 ```
 
-成员 B 映射：
+## Smoke Test
 
-| 后端字段 | 前端展示 |
-|---|---|
-| `diary` | 日记正文 |
-| `share_caption` | 分享文案 |
-| `summary_tags` | 标签列表 |
+```powershell
+cd backend
+npm.cmd run test:smoke
+```
 
-## 共享配置
-
-| 文件 | 用途 | 对齐点 |
-|---|---|---|
-| `config/personas.json` | 搭子人格 | `persona_id` |
-| `config/tasks.json` | 任务与徽章 | `task_id`、`reward_badge` |
-| `config/mock_places.json` | 模拟地点 | `task_id` |
-| `config/ui_copy.json` | 前端文案 | 不影响接口字段 |
-| `config/demo_state.json` | Demo 默认状态 | 默认人格、任务、地点、徽章 |
+当前 smoke test 覆盖：
+- health
+- chat greeting
+- location source explanation
+- follow-up photo question around current target place
+- switching target place
+- route follow-up from origin to target
+- default location contamination guard
+- weather mock reminder
+- analyze-photo fallback
+- complete-task
+- generate-diary

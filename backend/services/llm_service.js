@@ -7,6 +7,20 @@ function getLlmConfig() {
   return getEnvConfig();
 }
 
+function getLlmStatus() {
+  const config = getLlmConfig();
+
+  return {
+    llm_enable: config.enable,
+    provider: config.provider,
+    has_api_key: Boolean(config.apiKey),
+    has_base_url: Boolean(config.baseUrl),
+    has_model: Boolean(config.model),
+    model: config.model || "",
+    timeout_ms: config.timeoutMs
+  };
+}
+
 function isLlmEnabled() {
   const config = getLlmConfig();
 
@@ -28,14 +42,13 @@ function buildChatCompletionsUrl(baseUrl) {
   return trimmed.endsWith("/chat/completions") ? trimmed : `${trimmed}/chat/completions`;
 }
 
-async function callChatCompletion({ messages, temperature = 0.4, max_tokens = 400 }) {
-  const config = getLlmConfig();
-  if (!isLlmEnabled()) {
+async function callCompatibleChatCompletion({ config, messages, temperature = 0.4, max_tokens = 400 }) {
+  if (!config?.apiKey || !config?.baseUrl || !config?.model) {
     return null;
   }
 
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), config.timeoutMs);
+  const timeoutId = setTimeout(() => controller.abort(), config.timeoutMs || 8000);
 
   try {
     const response = await fetch(buildChatCompletionsUrl(config.baseUrl), {
@@ -67,8 +80,22 @@ async function callChatCompletion({ messages, temperature = 0.4, max_tokens = 40
   }
 }
 
-async function generateStructuredJson({ messages, normalizer, fallbackValue }) {
-  const content = await callChatCompletion({ messages });
+async function callChatCompletion({ messages, temperature = 0.4, max_tokens = 400 }) {
+  const config = getLlmConfig();
+  if (!isLlmEnabled()) {
+    return null;
+  }
+
+  return callCompatibleChatCompletion({
+    config,
+    messages,
+    temperature,
+    max_tokens
+  });
+}
+
+async function generateStructuredJson({ messages, normalizer, fallbackValue, temperature = 0.4, max_tokens = 400 }) {
+  const content = await callChatCompletion({ messages, temperature, max_tokens });
   if (!content) {
     return {
       data: fallbackValue,
@@ -99,7 +126,9 @@ async function generateStructuredJson({ messages, normalizer, fallbackValue }) {
 
 module.exports = {
   getLlmConfig,
+  getLlmStatus,
   isLlmEnabled,
+  callCompatibleChatCompletion,
   callChatCompletion,
   generateStructuredJson,
   buildChatCompletionsUrl
