@@ -21,7 +21,7 @@ const LEGACY_BADGE_MAP = {
 const initialLiveContext = {
   local_time: '',
   time_of_day: '',
-  source: 'mock',
+  source: 'unavailable',
   latitude: null,
   longitude: null,
   city: '',
@@ -88,6 +88,8 @@ const PLACE_STOP_WORDS = new Set([
   'solo',
 ])
 
+const CONTINUATION_PATTERNS = /继续聊|继续说|展开讲|然后呢|再讲讲|多说点|细说说|继续吧|接着聊|好的，继续聊吧|好啊继续/
+
 const formatTime = (timestamp = Date.now()) =>
   new Intl.DateTimeFormat('zh-CN', {
     hour: '2-digit',
@@ -126,7 +128,7 @@ const normalizeWeather = (weather = {}) => ({
 const normalizeLiveContext = (liveContext = {}) => ({
   ...initialLiveContext,
   ...liveContext,
-  source: liveContext.source || 'mock',
+  source: liveContext.source || 'unavailable',
   latitude: normalizeNumber(liveContext.latitude),
   longitude: normalizeNumber(liveContext.longitude),
   weather: normalizeWeather(liveContext.weather || {}),
@@ -315,13 +317,30 @@ export const extractRouteIntent = (userText = '', conversationState = initialCon
   return result
 }
 
+const isContinuationPrompt = (userText = '') => CONTINUATION_PATTERNS.test(String(userText || '').trim())
+
+const inferIntentFromGoal = (goal = '') => {
+  const text = String(goal || '')
+  if (!text) return ''
+  if (/故事|来历|记忆/.test(text)) return 'story'
+  if (/找吃的|吃什么|喝/.test(text)) return 'food'
+  if (/拍照|出片/.test(text)) return 'photo'
+  if (/去/.test(text) && /从/.test(text)) return 'route'
+  if (/天气|出门/.test(text)) return 'weather'
+  return ''
+}
+
 const inferIntentFromUserText = (userText = '', explicitPlace = '', routeInfo = {}) => {
   const text = String(userText || '')
 
+  if (isContinuationPrompt(text)) return 'continue'
   if (/你怎么知道|定位|位置怎么来的|你有我定位/.test(text)) return 'identity'
   if (/危险|害怕|不安全|有人跟着|迷路|救命/.test(text)) return 'safety'
+  if (/我的位置|我在哪|我现在在哪|现在在哪/.test(text)) return 'location_status'
+  if (/现在几点|几点了|现在几号|今天几号|几点啦/.test(text)) return 'time'
   if (routeInfo.is_route_question || /怎么去|怎么走|怎么从|从哪里去|从.+到.+|过去|回酒店|回去/.test(text)) return 'route'
   if (/天气|下雨|冷不冷|热不热|带伞|防晒|穿什么/.test(text)) return 'weather'
+  if (/有什么故事|有什么来历|为什么有名|历史|典故/.test(text)) return 'story'
   if (/有啥好吃的|有什么好吃的|吃什么|想吃|餐厅|小吃|夜宵|火锅|咖啡|喝点什么/.test(text)) return 'food'
   if (/哪里好拍照|哪儿好拍|怎么拍|拍哪里|机位|角度|出片|打卡照|拍照|照片|好拍吗/.test(text)) return 'photo'
   if (/好多人|人好多|太挤|人挤人|排队|人山人海|热闹/.test(text)) return 'crowd'
@@ -338,6 +357,7 @@ const deriveUserGoal = ({ inferredIntent = '', originPlace = '', targetPlace = '
   if (inferredIntent === 'food' && effectivePlace) return `在${effectivePlace}附近找吃的`
   if (inferredIntent === 'photo' && effectivePlace) return `在${effectivePlace}附近拍照`
   if (inferredIntent === 'weather') return '根据天气决定出门安排'
+  if (inferredIntent === 'story' && effectivePlace) return `了解${effectivePlace}的故事`
   if (inferredIntent === 'place_specific' && targetPlace) return `把目标切到${targetPlace}`
   return String(userText || '').trim()
 }
@@ -350,8 +370,14 @@ export const deriveConversationStateFromUserText = (userText = '', previousState
   const inferredIntent = inferIntentFromUserText(text, explicitPlace, routeInfo)
   const isCurrentPlace = /我在|到.+了|已经到/.test(text)
 
+  if (inferredIntent === 'continue') {
+    nextState.last_intent = inferIntentFromGoal(nextState.last_user_goal) || nextState.last_intent || ''
+    nextState.pending_question = nextState.last_intent || nextState.pending_question || ''
+    return nextState
+  }
+
   nextState.last_intent = inferredIntent
-  nextState.pending_question = ['route', 'food', 'photo', 'weather', 'crowd'].includes(inferredIntent) ? inferredIntent : ''
+  nextState.pending_question = ['route', 'food', 'photo', 'weather', 'crowd', 'story'].includes(inferredIntent) ? inferredIntent : ''
 
   if (/累|疲惫|走不动|困/.test(text)) {
     nextState.mood = 'tired'

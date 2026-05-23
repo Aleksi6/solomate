@@ -56,6 +56,28 @@ function formatLocalTime(localTime = "") {
   return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
 }
 
+function buildPlaceStoryShape(place = "") {
+  const value = String(place || "");
+
+  if (/[江河湖海滩湾港桥]/.test(value)) {
+    return `像${value}这种靠水的地方，故事常常和“到达”有关。白天看是城市的边线，到了晚上，灯一亮起来，它又会变成很多人记忆里最容易停下来的那一段风景。`;
+  }
+
+  if (/[街巷里坊路弄]/.test(value)) {
+    return `${value}这种地方的故事，往往藏在店铺更替和人来人往里。你站在那儿的时候，看到的不只是街景，也是在看一座城市日常生活怎么慢慢长出来。`;
+  }
+
+  if (/[园公园山岛林]/.test(value)) {
+    return `${value}的故事通常不靠喧闹，而是靠一代代人把散步、发呆、见面这些日常留在那里。它更像城市给人留的一口气。`;
+  }
+
+  if (/[馆院寺塔楼城站]/.test(value)) {
+    return `${value}这种地方的魅力，常常在建筑和时间叠在一起的时候最明显。你会感觉它不是单纯一个点位，而像一页还在继续写的城市记事。`;
+  }
+
+  return `像${value}这种地方，故事往往不只在资料里，也在它怎么被一代代人反复经过、拍照、告别和重逢里。`;
+}
+
 function buildWeatherReminder(weather = {}, timeOfDay = "") {
   const normalized = normalizeWeather(weather);
   const tips = [];
@@ -191,7 +213,7 @@ function fallbackChatResponse(input = {}) {
 
   if (intent === "story" && topicPlace) {
     return normalizeChatResponse({
-      reply_text: `像${topicPlace}这种地方，故事往往不只在资料里，也在它怎么被一代代人反复经过、拍照、告别和重逢里。你要是想听，我可以先从它为什么会变成这座城市的记忆点这个角度陪你聊。`,
+      reply_text: `${buildPlaceStoryShape(topicPlace)} 你要是愿意，我们还可以继续往下聊它为什么会变成这座城市的记忆点。`,
       reply_type: "story_share",
       emotion_detected: input.emotion_detected || "relaxed",
       suggested_action: input.suggested_action || "share_place_story",

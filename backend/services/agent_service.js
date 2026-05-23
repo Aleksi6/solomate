@@ -43,7 +43,7 @@ const DEFAULT_CONVERSATION_STATE = {
   live_context: {
     local_time: "",
     time_of_day: "",
-    source: "mock",
+    source: "unavailable",
     latitude: null,
     longitude: null,
     city: "",
@@ -75,6 +75,8 @@ const PLACE_STOP_WORDS = new Set([
   "那里去",
   "这里去"
 ]);
+
+const CONTINUATION_PATTERNS = /继续聊|继续说|展开讲|然后呢|再讲讲|多说点|细说说|继续吧|接着聊|好的，继续聊吧|好啊继续/;
 
 function getPersonas() {
   const personas = readJsonConfig("personas.json", []);
@@ -111,7 +113,7 @@ function sanitizeConversationState(state = {}) {
     live_context: {
       ...DEFAULT_CONVERSATION_STATE.live_context,
       ...liveContext,
-      source: liveContext.source || "mock",
+      source: liveContext.source || "unavailable",
       latitude: normalizeNumber(liveContext.latitude),
       longitude: normalizeNumber(liveContext.longitude),
       nearby_places: Array.isArray(liveContext.nearby_places) ? liveContext.nearby_places.filter(Boolean) : [],
@@ -164,6 +166,56 @@ function getMessageText(message = {}) {
   }
 
   return "";
+}
+
+function isContinuationPrompt(text = "") {
+  return CONTINUATION_PATTERNS.test(String(text || "").trim());
+}
+
+function inferIntentFromGoal(goal = "") {
+  const text = String(goal || "");
+
+  if (!text) return "";
+  if (/故事|来历|记忆/.test(text)) return "story";
+  if (/找吃的|吃什么|喝/.test(text)) return "food";
+  if (/拍照|出片/.test(text)) return "photo";
+  if (/去/.test(text) && /从/.test(text)) return "route";
+  if (/天气|出门/.test(text)) return "weather";
+  return "";
+}
+
+function buildPlaceCultureHint(place = "") {
+  const value = String(place || "");
+  if (!value) {
+    return {
+      place_character: "",
+      story_angles: [],
+      reply_style: "用正常聊天口吻，先给一个具体细节，再补一句感受或联想。"
+    };
+  }
+
+  let placeCharacter = "可以从它为什么会成为城市记忆点、当地人怎么使用这个地方、以及不同时间的气质变化来讲。";
+
+  if (/[江河湖海滩湾港桥]/.test(value)) {
+    placeCharacter = "可以从水岸、来往的人流、城市天际线、以及它如何承接到达与告别来讲。";
+  } else if (/[街巷里坊路弄]/.test(value)) {
+    placeCharacter = "可以从街区生活、店铺更替、旧城节奏、以及人为什么愿意一遍遍回来这里来讲。";
+  } else if (/[园公园山岛林]/.test(value)) {
+    placeCharacter = "可以从季节变化、散步感、城市留白和当地人怎样在这里放松来讲。";
+  } else if (/[馆院寺塔楼城站]/.test(value)) {
+    placeCharacter = "可以从建筑、历史层叠、公共记忆和它见过的城市变化来讲。";
+  }
+
+  return {
+    place_character: placeCharacter,
+    story_angles: [
+      "为什么它会被一代代人记住",
+      "白天和夜里气质有什么不同",
+      "当地人通常怎么使用这个地方",
+      "最值得注意的一两个具体细节"
+    ],
+    reply_style: "故事类回复用2到4句自然聊天语气，至少给1个具体意象或细节，不要只说抽象感受。"
+  };
 }
 
 function isCurrentPlaceStatement(text = "") {
@@ -255,8 +307,13 @@ function extractRouteIntent(userText = "", conversationState = {}) {
   return result;
 }
 
-function detectIntent({ userText = "", mode = "chat", explicitPlace = "", routeInfo = {} } = {}) {
+function detectIntent({ userText = "", mode = "chat", explicitPlace = "", routeInfo = {}, conversationState = {} } = {}) {
   const text = String(userText || "");
+  const state = sanitizeConversationState(conversationState);
+
+  if (isContinuationPrompt(text)) {
+    return inferIntentFromGoal(state.last_user_goal) || state.last_intent || "chat";
+  }
 
   if (/你怎么知道|定位|位置怎么来的|你有我定位/.test(text)) return "identity";
   if (/危险|害怕|不安全|有人跟着|迷路|救命/.test(text) || mode === "safety") return "safety";
@@ -348,6 +405,10 @@ function deriveUserGoal({ detectedIntent = "", originPlace = "", targetPlace = "
     return "根据天气决定出门安排";
   }
 
+  if (detectedIntent === "story" && effectivePlace) {
+    return `了解${effectivePlace}的故事`;
+  }
+
   if (detectedIntent === "time") {
     return "确认当前本地时间";
   }
@@ -383,7 +444,7 @@ function buildLiveContext({ payload = {}, conversationState = {}, location = {},
     payloadLiveContext.source ||
     stateLiveContext.source ||
     (payloadLiveContext.latitude !== undefined || stateLiveContext.latitude !== undefined ? "browser" : "") ||
-    (conversationState.current_place ? "user_text" : "mock");
+    (conversationState.current_place ? "user_text" : "unavailable");
   const latitude = normalizeNumber(payloadLiveContext.latitude, normalizeNumber(stateLiveContext.latitude));
   const longitude = normalizeNumber(payloadLiveContext.longitude, normalizeNumber(stateLiveContext.longitude));
   const weather = resolveWeatherContext({
@@ -434,7 +495,8 @@ function resolveConversationContext(payload = {}) {
     userText,
     mode: payload.mode || "chat",
     explicitPlace,
-    routeInfo
+    routeInfo,
+    conversationState
   });
   const recentPlace = extractRecentPlaceFromHistory(history, userText);
   const currentPlace = cleanPlaceCandidate(conversationState.current_place || liveContext.place_name || "");
@@ -604,6 +666,7 @@ function buildChatMessages({
 }) {
   const basePrompt = readPromptFile("base_agent_prompt.txt", "You are SoloMate. Return strict JSON only.");
   const conversationState = sanitizeConversationState(payload.conversation_state);
+  const cultureHint = buildPlaceCultureHint(contextSummary.effective_place || contextSummary.target_place);
 
   return [
     {
@@ -617,6 +680,10 @@ function buildChatMessages({
     {
       role: "system",
       content: `实时上下文 JSON: ${JSON.stringify(contextSummary.live_context, null, 2)}`
+    },
+    {
+      role: "system",
+      content: `地点细节与城市文化提示 JSON: ${JSON.stringify(cultureHint, null, 2)}`
     },
     ...toLlmHistoryMessages(payload.history),
     {
@@ -639,6 +706,13 @@ function buildChatMessages({
             do_not_ask_known_place_again: true,
             if_user_mentions_new_place_switch_context: true,
             answer_follow_up_using_current_topic: true
+          },
+          response_style: {
+            target_length: "2_to_4_sentences",
+            be_natural: true,
+            avoid_over_brief: true,
+            avoid_overlong: true,
+            story_reply_should_include_one_concrete_detail: detectedIntent === "story"
           },
           hints: {
             detected_emotion: emotion,

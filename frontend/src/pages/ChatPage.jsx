@@ -84,13 +84,10 @@ const buildMockWeather = (timeOfDay = 'afternoon') => {
 }
 
 const buildMockLocation = (conversationState = {}) => ({
-  city: conversationState.live_context?.city || conversationState.current_city || '杭州',
-  place_name:
-    conversationState.live_context?.place_name ||
-    conversationState.current_place ||
-    '西湖附近',
-  latitude: conversationState.live_context?.latitude ?? 30.25,
-  longitude: conversationState.live_context?.longitude ?? 120.15,
+  city: conversationState.live_context?.city || conversationState.current_city || '',
+  place_name: conversationState.live_context?.place_name || conversationState.current_place || '',
+  latitude: conversationState.live_context?.latitude ?? null,
+  longitude: conversationState.live_context?.longitude ?? null,
 })
 
 const selectLiveNearbyPlaces = (places = [], conversationState = {}) => {
@@ -210,7 +207,7 @@ function ChatPage() {
       source:
         browserLocation?.latitude != null
           ? 'browser'
-          : baseState.live_context?.source || (baseState.current_place ? 'user_text' : 'mock'),
+          : baseState.live_context?.source || (baseState.current_place ? 'user_text' : 'unavailable'),
       latitude: browserLocation?.latitude ?? baseState.live_context?.latitude ?? fallbackLocation.latitude,
       longitude: browserLocation?.longitude ?? baseState.live_context?.longitude ?? fallbackLocation.longitude,
       city: baseState.live_context?.city || baseState.current_city || fallbackLocation.city,

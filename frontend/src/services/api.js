@@ -296,6 +296,7 @@ const buildMockChatResponse = (payload = {}) => {
   const intent = detectIntent(userText, explicitPlace, routeInfo)
   const weather = conversationState.live_context?.weather || payload.live_context?.weather || {}
   const timeOfDay = conversationState.live_context?.time_of_day || payload.live_context?.time_of_day || ''
+  const locationSource = conversationState.live_context?.source || payload.live_context?.source || 'unavailable'
 
   if (intent === 'identity') {
     return {
@@ -312,9 +313,8 @@ const buildMockChatResponse = (payload = {}) => {
   if (intent === 'location_status') {
     const currentPlace = conversationState.current_place || conversationState.live_context?.place_name || payload.live_context?.place_name || ''
     const currentCity = conversationState.current_city || conversationState.live_context?.city || payload.live_context?.city || ''
-    const source = conversationState.live_context?.source || payload.live_context?.source || 'mock'
     const locationLine =
-      source === 'browser'
+      locationSource === 'browser'
         ? `我当前拿到的实时位置是${currentCity || ''}${currentPlace || ''}。`
         : `我现在没有拿到你设备的实时定位，只能先按${currentCity || ''}${currentPlace || '模拟位置'}来陪你判断。`
 
@@ -323,7 +323,7 @@ const buildMockChatResponse = (payload = {}) => {
       reply_type: 'location_status',
       emotion_detected: 'uncertain',
       suggested_action: 'clarify_location_source',
-      safety_tip: source === 'browser' ? '如果你移动了位置，可以再发一句“说出当前位置”，我会按新的位置继续。' : '如果你愿意开定位或直接用文字告诉我你在哪，我就能接得更准。',
+      safety_tip: locationSource === 'browser' ? '如果你移动了位置，可以再发一句“说出当前位置”，我会按新的位置继续。' : '如果你愿意开定位或直接用文字告诉我你在哪，我就能接得更准。',
       next_options: ['说出当前位置', '附近有什么', '我想去别的地方'],
       task_triggered: '',
     }
@@ -396,7 +396,9 @@ const buildMockChatResponse = (payload = {}) => {
 
   if (intent === 'story' && effectivePlace) {
     return {
-      reply_text: `像${effectivePlace}这种地方，故事往往不只在资料里，也在它怎么被一代代人反复经过、拍照、告别和重逢里。你要是想听，我可以先从它为什么会变成城市记忆点这个角度陪你聊。`,
+      reply_text: /[江河湖海滩湾港桥]/.test(effectivePlace)
+        ? `${effectivePlace}这种靠水的地方，故事常常和“到达”有关。白天看是城市的边线，到了晚上灯亮起来，它又会变成很多人记忆里最容易停下来的那一段风景。`
+        : `像${effectivePlace}这种地方，故事往往不只在资料里，也在它怎么被一代代人反复经过、记住和讲给别人听。你要是愿意，我们可以继续往下聊它为什么会变成城市记忆点。`,
       reply_type: 'story_share',
       emotion_detected: 'relaxed',
       suggested_action: 'share_place_story',
