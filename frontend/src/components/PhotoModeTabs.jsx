@@ -1,13 +1,13 @@
 import { Camera, ImagePlus } from 'lucide-react'
 
 const modes = [
-  { id: 'environment', label: '环境分享', icon: Camera },
-  { id: 'souvenir', label: '纪念物碎片', icon: ImagePlus },
+  { id: 'environment', label: '看看我在哪', icon: Camera },
+  { id: 'souvenir', label: '收藏这个瞬间', icon: ImagePlus },
 ]
 
 function PhotoModeTabs({ activeMode, onChange }) {
   return (
-    <div className="photo-mode-tabs" role="tablist" aria-label="拍照模式">
+    <div className="photo-mode-tabs photo-pill-tabs" role="tablist" aria-label="拍照模式">
       {modes.map((mode) => {
         const Icon = mode.icon
         const isActive = activeMode === mode.id

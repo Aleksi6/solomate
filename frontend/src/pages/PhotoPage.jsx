@@ -82,33 +82,43 @@ function PhotoPage() {
   }
 
   return (
-    <section className="page photo-page">
-      <div className="page-intro">
-        <p className="eyebrow">寄给搭子的明信片</p>
-        <h1>{activeMode === 'environment' ? '把眼前世界寄给我' : '收下一枚纪念物碎片'}</h1>
-        <p className="lead">
-          {activeMode === 'environment'
-            ? '分享你眼前的环境，我会帮你看看氛围、安全感和下一步小建议。'
-            : '选一张想留下的照片，SoloMate 会先帮你做成一张旅行手账小卡片。'}
+    <section className="page photo-page diffuse-bg">
+      <div className="page-intro photo-page-intro">
+        <p className="eyebrow">寄给搭子</p>
+        <h1 className="page-title">寄给搭子</h1>
+        <p className="page-subtitle">
+          把眼前的街景、光线和小小纪念寄出去。搭子会替你看看这个世界，也替你把瞬间收进手账。
         </p>
       </div>
 
       <PhotoModeTabs activeMode={activeMode} onChange={handleModeChange} />
 
-      <label className="upload-box postcard-upload">
-        {preview ? <img src={preview} alt="上传预览" /> : <ImagePlus size={38} />}
-        <span>{preview ? '换一张照片' : activeMode === 'environment' ? '上传一张环境照片' : '上传一张纪念物照片'}</span>
+      <label className="upload-box postcard-upload glass-card photo-postcard-uploader">
+        {preview ? <img src={preview} alt="上传预览" /> : <ImagePlus size={40} />}
+        <div className="photo-upload-copy">
+          <strong>{preview ? '换一张照片' : activeMode === 'environment' ? '把现在的风景寄给搭子' : '把这个瞬间收进明信片'}</strong>
+          <span>{activeMode === 'environment' ? '上传后，搭子会看看你现在身处怎样的环境。' : '上传后，会先生成一张可保存的纪念物碎片卡。'}</span>
+        </div>
         <input type="file" accept="image/*" onChange={handleUpload} />
       </label>
 
       {activeMode === 'environment' && environmentResult && (
-        <article className="analysis-card postcard-result">
-          <Sparkles size={22} />
-          <h2>{environmentResult.reply_text}</h2>
-          <p>{environmentResult.scene_summary}</p>
-          <p>{environmentResult.safety_observation}</p>
-          <p>{environmentResult.photo_advice}</p>
-          <p>{environmentResult.task_result?.reason}</p>
+        <article className="analysis-card postcard-result photo-analysis-card">
+          <div className="photo-analysis-head">
+            <div className="call-card-icon">
+              <Sparkles size={20} />
+            </div>
+            <div>
+              <p className="eyebrow">搭子正在看你看到的世界</p>
+              <h2>{environmentResult.reply_text}</h2>
+            </div>
+          </div>
+          <div className="photo-analysis-notes">
+            <p>{environmentResult.scene_summary}</p>
+            <p>{environmentResult.safety_observation}</p>
+            <p>{environmentResult.photo_advice}</p>
+            <p>{environmentResult.task_result?.reason}</p>
+          </div>
           <Link className="primary-button" to="/badges">
             查看记忆碎片
           </Link>
@@ -116,8 +126,16 @@ function PhotoPage() {
       )}
 
       {activeMode === 'souvenir' && souvenirDraft && (
-        <section className="souvenir-preview" aria-label="纪念物碎片预览">
-          <p className="eyebrow">手账预览</p>
+        <section className="souvenir-preview postcard-preview-panel" aria-label="纪念物碎片预览">
+          <div className="photo-analysis-head">
+            <div className="call-card-icon">
+              <Save size={18} />
+            </div>
+            <div>
+              <p className="eyebrow">旅行手账预览</p>
+              <h2>先看看这张要不要留下</h2>
+            </div>
+          </div>
           <MemoryFragmentCard fragment={souvenirDraft} />
           <button type="button" className="primary-button full" onClick={handleSaveSouvenir} disabled={isSaved}>
             <Save size={18} />

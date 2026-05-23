@@ -7,17 +7,21 @@ import { getDemoState } from '../store/demoState'
 import { readMemoryFragments } from '../utils/memoryDrops'
 
 const sectionCopy = {
-  task_badge: {
-    title: '任务徽章碎片',
-    empty: '完成一次城市任务后，徽章会变成这里的一枚记忆碎片。',
+  badge: {
+    title: '任务徽章',
+    empty: '完成一段路上的小任务后，徽章会悄悄落进这里。',
+  },
+  achievement: {
+    title: '成就',
+    empty: '某些很轻的小勇气，也会被搭子认真记下来。',
   },
   random_drop: {
-    title: '随机掉落碎片',
-    empty: '某个刚刚好的瞬间，还在路上等你遇见。',
+    title: '随机掉落',
+    empty: '今天路上的一些刚刚好，还在等你和它撞个满怀。',
   },
-  souvenir: {
-    title: '纪念物卡片碎片',
-    empty: '拍照、打卡或写下心情后，可以把小纪念收进这里。',
+  souvenir_card: {
+    title: '纪念物卡片',
+    empty: '当你把风景或纪念物收进手账，这里就会多一张旅行贴纸。',
   },
 }
 
@@ -47,55 +51,66 @@ const getDisplayFragments = (state) => {
   return [...storedFragments, ...migratedBadges]
 }
 
+const getFragmentSection = (fragment) => {
+  if (fragment.dropKind === 'badge' || fragment.type === 'task_badge') return 'badge'
+  if (fragment.dropKind === 'achievement') return 'achievement'
+  if (fragment.source === 'souvenir_card' || fragment.type === 'souvenir') return 'souvenir_card'
+  return 'random_drop'
+}
+
 function BadgePage() {
   const [state] = useState(getDemoState())
   const fragments = useMemo(() => getDisplayFragments(state), [state])
   const groupedFragments = useMemo(
-    () => ({
-      task_badge: fragments.filter((fragment) => fragment.type === 'task_badge' || fragment.dropKind === 'badge'),
-      random_drop: fragments.filter(
-        (fragment) =>
-          fragment.type === 'random_drop' ||
-          fragment.dropKind === 'achievement' ||
-          fragment.dropKind === 'memory',
-      ),
-      souvenir: fragments.filter((fragment) => fragment.type === 'souvenir'),
-    }),
+    () =>
+      Object.keys(sectionCopy).reduce((groups, key) => {
+        groups[key] = fragments.filter((fragment) => getFragmentSection(fragment) === key)
+        return groups
+      }, {}),
     [fragments],
   )
   const totalCount = fragments.length
+  const rareCount = fragments.filter((fragment) => fragment.rarity === 'rare').length
 
   return (
-    <section className="page memory-page">
-      <div className="page-intro">
+    <section className="page memory-page diffuse-bg">
+      <div className="page-intro memory-book-intro">
         <p className="eyebrow">Memory Fragment Book</p>
-        <h1>记忆碎片收集册</h1>
-        <p className="lead">把路上的小确定感、任务徽章和偶然遇见的瞬间收起来。每一片都算数。</p>
+        <h1 className="page-title">记忆碎片收集册</h1>
+        <p className="page-subtitle">这些是今天路上悄悄留下来的小瞬间</p>
       </div>
 
-      <section className="memory-progress stamp-progress" aria-label="记忆碎片收集进度">
-        <div>
-          <Sparkles size={20} />
-          <span>已收集 {totalCount} 枚碎片</span>
+      <section className="memory-progress stamp-progress memory-book-hero" aria-label="记忆碎片收集进度">
+        <div className="memory-book-orb" aria-hidden="true">
+          <div className="gradient-orb memory-book-light" />
         </div>
-        <small>{totalCount > 0 ? '继续探索会让这本册子更厚一点。' : '第一枚碎片还在等你出发。'}</small>
+        <div className="memory-book-copy">
+          <div>
+            <Sparkles size={20} />
+            <span>已收集 {totalCount} 枚碎片</span>
+          </div>
+          <small>{rareCount > 0 ? `其中有 ${rareCount} 枚稀有碎片在发亮。` : '每一枚都很轻，但它们会慢慢把今天拼完整。'}</small>
+        </div>
       </section>
 
       {totalCount === 0 && (
-        <section className="memory-empty">
+        <section className="memory-empty memory-empty-soft">
           <BookOpen size={30} />
-          <h2>还没有记忆碎片</h2>
-          <p>完成一次对话、任务或照片记录后，SoloMate 会把值得留下的小瞬间放进这里。</p>
+          <h2>你的收集册还很轻</h2>
+          <p>等你说完一段路、寄出一张照片，或者收下一点点成就，这里就会慢慢长出今天的旅行贴纸。</p>
         </section>
       )}
 
       {Object.entries(sectionCopy).map(([type, copy]) => (
         <section key={type} className="memory-section">
-          <h2>{copy.title}</h2>
+          <div className="memory-section-head">
+            <h2>{copy.title}</h2>
+            {groupedFragments[type].length > 0 && <span>{groupedFragments[type].length}</span>}
+          </div>
           {groupedFragments[type].length > 0 ? (
             <div className="memory-fragment-list">
               {groupedFragments[type].map((fragment) => (
-                <MemoryFragmentCard key={fragment.id} fragment={fragment} />
+                <MemoryFragmentCard key={fragment.id} fragment={fragment} sectionType={type} />
               ))}
             </div>
           ) : (

@@ -43,27 +43,29 @@ function PersonaQuizPage({ onBack, onUsePersona }) {
 
   if (showResult) {
     return (
-      <section className="page persona-quiz-page">
-        <button type="button" className="text-back-button" onClick={onBack}>
+      <section className="page persona-quiz-page diffuse-bg">
+        <button type="button" className="text-back-button ghost-button" onClick={onBack}>
           <ArrowLeft size={17} />
           回到搭子列表
         </button>
 
-        <article className="quiz-result-card">
+        <article className="quiz-result-card glass-card">
           <div className="quiz-result-stamp">
             <Sparkles size={24} />
           </div>
           <p className="eyebrow">推荐搭子</p>
-          <h1>{result.name}</h1>
-          <p className="lead">{result.summary}</p>
+          <h1 className="page-title">{result.name}</h1>
+          <p className="page-subtitle">{result.summary}</p>
 
           <div className="quiz-tag-row">
             {result.tags.map((tag) => (
-              <span key={tag}>{tag}</span>
+              <span key={tag} className="pill-button">
+                {tag}
+              </span>
             ))}
           </div>
 
-          <div className="quiz-scenes">
+          <div className="quiz-scenes soft-card">
             <h2>适合这些时刻</h2>
             {result.scenes.map((scene) => (
               <p key={scene}>
@@ -82,18 +84,18 @@ function PersonaQuizPage({ onBack, onUsePersona }) {
   }
 
   return (
-    <section className="page persona-quiz-page">
-      <button type="button" className="text-back-button" onClick={onBack}>
+    <section className="page persona-quiz-page diffuse-bg">
+      <button type="button" className="text-back-button ghost-button" onClick={onBack}>
         <ArrowLeft size={17} />
         回到搭子列表
       </button>
 
-      <div className="page-intro">
+      <div className="page-intro glass-card">
         <p className="eyebrow">
           {quizConfig.title} · {step + 1}/{quizConfig.questions.length}
         </p>
-        <h1>{question.title}</h1>
-        <p className="lead">{quizConfig.subtitle}</p>
+        <h1 className="page-title">{question.title}</h1>
+        <p className="page-subtitle">{quizConfig.subtitle}</p>
       </div>
 
       <div className="quiz-option-list">

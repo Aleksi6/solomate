@@ -3,10 +3,10 @@ import { Sparkles, X } from 'lucide-react'
 function MemoryDropToast({ drop, onClose }) {
   if (!drop) return null
 
-  const rarityLabel = drop.rarity === 'rare' ? '稀有掉落' : '新的掉落'
+  const rarityLabel = drop.rarity === 'rare' ? '寄来一份稀有惊喜' : '搭子替你收下一枚小掉落'
 
   return (
-    <aside className="memory-drop-toast" role="status" aria-live="polite">
+    <aside className="memory-drop-toast postcard-drop-toast" role="status" aria-live="polite">
       <div className="memory-drop-icon">
         <Sparkles size={20} />
       </div>

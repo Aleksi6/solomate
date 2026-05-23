@@ -11,10 +11,10 @@ import DiaryPage from './pages/DiaryPage'
 const tabs = [
   { to: '/', label: '首页', icon: Home },
   { to: '/persona', label: '搭子', icon: Users },
-  { to: '/chat', label: '聊天', icon: MessageCircle },
+  { to: '/chat', label: '通话', icon: MessageCircle },
   { to: '/photo', label: '拍照', icon: Camera },
-  { to: '/badges', label: '徽章', icon: Trophy },
-  { to: '/diary', label: '日记', icon: BookOpen },
+  { to: '/badges', label: '碎片', icon: Trophy },
+  { to: '/diary', label: '手账', icon: BookOpen },
 ]
 
 function App() {
@@ -33,7 +33,7 @@ function App() {
           </Routes>
         </main>
 
-        <nav className="bottom-nav" aria-label="主导航">
+        <nav className="bottom-nav app-nav-glass" aria-label="主导航">
           {tabs.map((item) => {
             const Icon = item.icon
             return (

@@ -56,11 +56,11 @@ function PersonaPage() {
   }
 
   return (
-    <section className="page persona-page">
-      <div className="page-intro">
+    <section className="page persona-page diffuse-bg">
+      <div className="page-intro glass-card">
         <p className="eyebrow">选择旅行伙伴</p>
-        <h1>今天想被怎样陪伴？</h1>
-        <p className="lead">挑一个最贴近当前心情的搭子。之后聊天、拍照和手账，都会沿用这位伙伴的语气。</p>
+        <h1 className="page-title">今天想被怎样陪伴？</h1>
+        <p className="page-subtitle">挑一个最贴近当前心情的搭子。之后聊天、拍照和手账，都会沿用这位伙伴的语气。</p>
       </div>
 
       <button type="button" className="quiz-entry-card" onClick={() => setShowQuiz(true)}>

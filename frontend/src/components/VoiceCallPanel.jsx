@@ -19,25 +19,42 @@ function VoiceCallPanel({ isSending = false, lastReply, onVoiceMessage, persona 
     speechSynthesis.speak(lastReply.text)
   }, [lastReply, speechSynthesis])
 
-  const statusText = (() => {
-    if (!speechRecognition.isSupported) return '当前浏览器不支持语音识别，可继续用文字输入'
-    if (speechRecognition.error) return '识别失败，可重试或使用文字输入'
-    if (isSending) return '正在等待 AI 回复'
-    if (speechRecognition.isListening) return '正在听你说话'
-    if (speechRecognition.transcript) return speechRecognition.transcript
-    return '点击麦克风开始一轮语音对话'
+  const panelState = (() => {
+    if (!speechRecognition.isSupported) return 'fallback'
+    if (speechRecognition.error) return 'fallback'
+    if (isSending) return 'thinking'
+    if (speechRecognition.isListening) return 'listening'
+    if (speechSynthesis.isSpeaking) return 'speaking'
+    return 'idle'
   })()
 
+  const statusText = (() => {
+    if (!speechRecognition.isSupported) return '当前浏览器不支持语音识别，文字输入仍然可用'
+    if (speechRecognition.error) return '识别有点不稳定，先用文字输入也没关系'
+    if (isSending) return '搭子正在想一个更适合你的下一步'
+    if (speechRecognition.isListening) return '我在听，你慢慢说'
+    if (speechSynthesis.isSpeaking) return '我陪你说完这段路'
+    return '我陪你说完这段路'
+  })()
+
+  const subText = speechRecognition.transcript
+    ? speechRecognition.transcript
+    : lastReply?.text || '点击麦克风，开始这一轮陪伴通话'
+
   return (
-    <section className="voice-call-panel" aria-label="语音通话面板">
-      <div className="voice-call-main">
-        <div className="voice-avatar" aria-hidden="true">
-          {persona?.avatar}
+    <section className="voice-call-panel call-stage-panel" aria-label="陪伴通话面板">
+      <div className="call-stage-top">
+        <p className="eyebrow">陪伴通话</p>
+        <span className={`call-state-chip is-${panelState}`}>{statusText}</span>
+      </div>
+
+      <div className="call-stage-center">
+        <div className={`voice-orb voice-wave call-voice-orb is-${panelState}`} aria-hidden="true">
+          <span>{persona?.avatar || '✨'}</span>
         </div>
-        <div className="voice-call-copy">
-          <p className="eyebrow">拟语音通话</p>
+        <div className="call-stage-copy">
           <h2>{persona?.name || 'SoloMate'}</h2>
-          <p>{statusText}</p>
+          <p>{subText}</p>
         </div>
       </div>
 
@@ -55,7 +72,7 @@ function VoiceCallPanel({ isSending = false, lastReply, onVoiceMessage, persona 
 
         <button
           type="button"
-          className="round-control"
+          className={`round-control ${speechSynthesis.isSpeaking ? 'is-active' : ''}`}
           onClick={speechSynthesis.isSpeaking ? speechSynthesis.cancel : () => speechSynthesis.speak(lastReply?.text)}
           disabled={!speechSynthesis.isSupported || !lastReply?.text}
           aria-label={speechSynthesis.isSpeaking ? '停止播报' : '播放回复'}
