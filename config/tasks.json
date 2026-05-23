@@ -1,0 +1,34 @@
+[
+  {
+    "id": "first_voice_task",
+    "title": "旅行第一步",
+    "description": "和你的旅行搭子完成第一次对话。",
+    "requirements": ["发送一条文本或语音消息"],
+    "reward_badge": "不孤单徽章",
+    "success_message": "你已经迈出今天的第一步，不孤单徽章已解锁。"
+  },
+  {
+    "id": "firework_photo_task",
+    "title": "烟火气打卡",
+    "description": "拍一张有本地生活气息的照片。",
+    "requirements": ["店铺", "灯光", "人流", "招牌", "小吃摊"],
+    "reward_badge": "城市烟火徽章",
+    "success_message": "你捕捉到了这座城市最有生活感的一面，城市烟火徽章已解锁。"
+  },
+  {
+    "id": "local_food_task",
+    "title": "本地味道挑战",
+    "description": "拍一张本地食物、菜单或餐厅招牌。",
+    "requirements": ["食物", "菜单", "餐厅", "招牌", "地方特色"],
+    "reward_badge": "本地味道徽章",
+    "success_message": "你发现了这座城市的味道，本地味道徽章已解锁。"
+  },
+  {
+    "id": "safe_route_task",
+    "title": "安心路线选择",
+    "description": "选择一条人多、明亮、适合单人夜间出行的路线。",
+    "requirements": ["人多", "灯光亮", "主路", "商场", "地铁站"],
+    "reward_badge": "安心探索徽章",
+    "success_message": "你做出了更安心的路线选择，安心探索徽章已解锁。"
+  }
+]
