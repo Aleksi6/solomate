@@ -5,6 +5,7 @@ import ChatBubble from '../components/ChatBubble'
 import PlaceCard from '../components/PlaceCard'
 import TaskCard from '../components/TaskCard'
 import VoiceButton from '../components/VoiceButton'
+import VoiceCallPanel from '../components/VoiceCallPanel'
 import { getMockPlaces, personas, sendChatMessage, tasks } from '../services/api'
 import { addMessage, addVisitedPlace, completeTask, getDemoState } from '../store/demoState'
 
@@ -12,6 +13,8 @@ function ChatPage() {
   const [state, setState] = useState(getDemoState())
   const [places, setPlaces] = useState([])
   const [text, setText] = useState('')
+  const [isSending, setIsSending] = useState(false)
+  const [lastVoiceReply, setLastVoiceReply] = useState(null)
   const persona = useMemo(() => state.selectedPersona || personas[0], [state.selectedPersona])
   const activeTask = tasks[0]
 
@@ -20,26 +23,42 @@ function ChatPage() {
   }, [])
 
   const sendMessage = async (input = text) => {
+    if (isSending) return null
+
     const clean = input.trim()
-    if (!clean) return
+    if (!clean) return null
+
     const userMessage = { id: crypto.randomUUID(), role: 'user', text: clean, time: '刚刚' }
     addMessage(userMessage)
     setText('')
     setState(getDemoState())
-    const reply = await sendChatMessage({
-      user_text: clean,
-      persona_id: persona.id,
-      mode: 'decision',
-      context: {
-        travel_mode: 'solo',
-        mood: 'uncertain',
-      },
-      nearby_places: places,
-      history: state.messages,
-    })
-    addMessage({ id: crypto.randomUUID(), role: 'buddy', text: reply.reply_text, time: '刚刚' })
-    completeTask('first_voice_task', '不孤单徽章')
-    setState(getDemoState())
+    setIsSending(true)
+
+    try {
+      const reply = await sendChatMessage({
+        user_text: clean,
+        persona_id: persona.id,
+        mode: 'decision',
+        context: {
+          travel_mode: 'solo',
+          mood: 'uncertain',
+        },
+        nearby_places: places,
+        history: state.messages,
+      })
+      const buddyMessage = { id: crypto.randomUUID(), role: 'buddy', text: reply.reply_text, time: '刚刚' }
+      addMessage(buddyMessage)
+      completeTask('first_voice_task', activeTask.rewardBadge)
+      setState(getDemoState())
+      return buddyMessage
+    } finally {
+      setIsSending(false)
+    }
+  }
+
+  const sendVoiceMessage = async (input) => {
+    const buddyMessage = await sendMessage(input)
+    if (buddyMessage) setLastVoiceReply(buddyMessage)
   }
 
   return (
@@ -58,6 +77,13 @@ function ChatPage() {
         ))}
       </div>
 
+      <VoiceCallPanel
+        isSending={isSending}
+        lastReply={lastVoiceReply}
+        onVoiceMessage={sendVoiceMessage}
+        persona={persona}
+      />
+
       <form
         className="composer"
         onSubmit={(event) => {
@@ -72,7 +98,10 @@ function ChatPage() {
       </form>
 
       <div className="action-row">
-        <VoiceButton label="说出当前位置" onClick={() => sendMessage('我现在想找一个安心又有旅行感的下一站')} />
+        <VoiceButton
+          label="说出当前位置"
+          onClick={() => sendMessage('我现在想找一个安心又有旅行感的下一站')}
+        />
         <Link className="icon-link" to="/photo">
           <Camera size={18} />
           拍照
@@ -83,7 +112,7 @@ function ChatPage() {
         </Link>
       </div>
 
-      <h2>附近适合停一下</h2>
+      <h2>附近适合停一停</h2>
       <div className="card-stack">
         {places.map((place) => (
           <PlaceCard

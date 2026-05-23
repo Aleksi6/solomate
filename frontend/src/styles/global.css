@@ -391,6 +391,109 @@ h3 {
   background: var(--coral);
 }
 
+.voice-call-panel {
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: 0 10px 24px rgba(83, 64, 43, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.voice-call-main {
+  display: grid;
+  grid-template-columns: 58px 1fr;
+  gap: 12px;
+  align-items: center;
+}
+
+.voice-avatar {
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: #ffe8dd;
+  font-size: 1.75rem;
+}
+
+.voice-call-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.voice-call-copy p:last-child {
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.voice-call-controls {
+  display: flex;
+  justify-content: center;
+  gap: 14px;
+}
+
+.round-control {
+  width: 54px;
+  height: 54px;
+  border: 0;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: var(--green);
+  background: #edf7ef;
+  cursor: pointer;
+}
+
+.round-control.is-active {
+  color: #fffdf8;
+  background: var(--coral);
+}
+
+.round-control:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+.voice-settings {
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+
+.voice-settings summary {
+  cursor: pointer;
+  color: var(--green);
+  font-weight: 850;
+}
+
+.voice-settings label {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 0.84rem;
+  font-weight: 750;
+}
+
+.voice-settings select,
+.voice-settings input[type="range"] {
+  width: 100%;
+}
+
+.voice-settings select {
+  min-height: 40px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0 10px;
+  color: var(--ink);
+  background: #fffdf8;
+}
+
 .place-card,
 .task-card {
   padding: 15px;
