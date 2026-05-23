@@ -20,13 +20,23 @@
     "task_id": "firework_photo_task"
   },
   {
+    "id": "coffee_stop",
+    "name": "街角咖啡店",
+    "type": "rest",
+    "distance": 420,
+    "safety_level": "high",
+    "tags": ["休息", "充电", "明亮", "适合独处"],
+    "description": "适合有点累或需要整理心情时停下来，环境明亮，也方便规划下一站。",
+    "task_id": "first_voice_task"
+  },
+  {
     "id": "riverside",
     "name": "江边步道",
     "type": "view",
     "distance": 1200,
     "safety_level": "medium",
     "tags": ["风景", "散步", "夜景"],
-    "description": "风景好，但夜间单人前往需要注意人流和照明情况。",
+    "description": "风景好，但夜间单人前往需要注意人流和照明情况，更适合白天或结伴。",
     "task_id": "safe_route_task"
   }
 ]

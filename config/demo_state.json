@@ -1,0 +1,16 @@
+{
+  "personaId": "gentle_friend",
+  "currentTaskId": "firework_photo_task",
+  "completedTasks": [],
+  "badges": [],
+  "visitedPlaces": ["老街入口"],
+  "moodHistory": ["uncertain"],
+  "chatSummary": "用户一开始有点不安，想让 SoloMate 帮忙决定下一站。",
+  "mockLocation": {
+    "city": "杭州",
+    "place_name": "西湖附近",
+    "lat": 30.25,
+    "lng": 120.15
+  },
+  "lastPhotoAnalysis": null
+}
