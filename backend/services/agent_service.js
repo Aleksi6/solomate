@@ -1,4 +1,4 @@
-const { readJsonConfig, findById } = require("../utils/json_loader");
+const { readJsonConfig, findById, readPromptFile } = require("../utils/json_loader");
 const {
   DEFAULT_LOCATION,
   fallbackChatResponse,
@@ -6,13 +6,16 @@ const {
   normalizeChatResponse,
   normalizeDiaryResponse
 } = require("../utils/fallback");
+const { generateStructuredJson, isLlmEnabled } = require("./llm_service");
 
 const DEFAULT_PERSONA = {
   id: "gentle_friend",
   name: "温柔朋友型",
+  tone: "温柔、自然、像朋友，不说教",
   opening_line: "今天我陪你走，不用急，我们慢慢来。",
   comfort_line: "我在，你不是一个人。我们先选一个更安心的方向。",
-  safety_line: "建议你优先走人多、灯光亮的路，不要往太偏的地方走。"
+  safety_line: "建议你优先走人多、灯光亮的路，不要往太偏的地方走。",
+  system_prompt: "你是一个温柔可靠的旅行搭子，适合陪伴单人出行用户。"
 };
 
 const DEFAULT_PLACE = {
@@ -41,9 +44,7 @@ function pickPersona(personaId) {
 }
 
 function normalizeLocation(location) {
-  return location && typeof location === "object"
-    ? { ...DEFAULT_LOCATION, ...location }
-    : DEFAULT_LOCATION;
+  return location && typeof location === "object" ? { ...DEFAULT_LOCATION, ...location } : DEFAULT_LOCATION;
 }
 
 function detectEmotion(userText = "", context = {}) {
@@ -52,7 +53,7 @@ function detectEmotion(userText = "", context = {}) {
   }
 
   const text = String(userText || "");
-  if (/害怕|不安|危险|迷路|好黑|黑|怕/.test(text)) return "nervous";
+  if (/害怕|不安|危险|迷路|黑|怕/.test(text)) return "nervous";
   if (/累|疲惫|走不动|休息/.test(text)) return "tired";
   if (/不知道|纠结|去哪|迷茫|犹豫/.test(text)) return "uncertain";
   if (/开心|放松|舒服|好玩/.test(text)) return "relaxed";
@@ -61,9 +62,7 @@ function detectEmotion(userText = "", context = {}) {
 }
 
 function pickPlace(nearbyPlaces) {
-  const places = Array.isArray(nearbyPlaces) && nearbyPlaces.length > 0
-    ? nearbyPlaces
-    : getMockPlaces().slice(0, 4);
+  const places = Array.isArray(nearbyPlaces) && nearbyPlaces.length > 0 ? nearbyPlaces : getMockPlaces().slice(0, 4);
 
   return (
     places.find((place) => place && place.id === "night_market") ||
@@ -80,14 +79,7 @@ function getSuggestedAction(place = DEFAULT_PLACE) {
   return place.id ? `go_to_${place.id}` : "choose_safe_place";
 }
 
-async function generateChatResponse(payload = {}) {
-  const safePayload = payload && typeof payload === "object" ? payload : {};
-  const persona = pickPersona(safePayload.persona_id);
-  const context = safePayload.context && typeof safePayload.context === "object" ? safePayload.context : {};
-  const location = normalizeLocation(safePayload.location);
-  const mode = safePayload.mode || "chat";
-  const emotion = detectEmotion(safePayload.user_text, context);
-  const place = pickPlace(safePayload.nearby_places);
+function buildFallbackChatResponse({ persona, location, mode, emotion, place }) {
   const personaLine = persona.comfort_line || persona.opening_line || DEFAULT_PERSONA.comfort_line;
 
   if (mode === "safety" || emotion === "nervous") {
@@ -136,8 +128,154 @@ async function generateChatResponse(payload = {}) {
   });
 }
 
-function generateDiary(payload = {}) {
-  return normalizeDiaryResponse(fallbackDiary(payload && typeof payload === "object" ? payload : {}));
+function buildChatMessages({ payload, persona, location, mode, emotion, nearbyPlaces, fallbackResponse }) {
+  const basePrompt = readPromptFile(
+    "base_agent_prompt.txt",
+    "You are SoloMate. Return strict JSON only."
+  );
+
+  const userPrompt = JSON.stringify(
+    {
+      persona: {
+        id: persona.id,
+        name: persona.name,
+        tone: persona.tone || DEFAULT_PERSONA.tone,
+        opening_line: persona.opening_line || DEFAULT_PERSONA.opening_line,
+        comfort_line: persona.comfort_line || DEFAULT_PERSONA.comfort_line,
+        safety_line: persona.safety_line || DEFAULT_PERSONA.safety_line,
+        system_prompt: persona.system_prompt || DEFAULT_PERSONA.system_prompt
+      },
+      request: {
+        user_text: payload.user_text || "",
+        persona_id: payload.persona_id || DEFAULT_PERSONA.id,
+        mode,
+        location,
+        context: payload.context || {},
+        nearby_places: nearbyPlaces,
+        history: Array.isArray(payload.history) ? payload.history.slice(-6) : []
+      },
+      hints: {
+        detected_emotion: emotion,
+        preferred_place: placeSummary(nearbyPlaces[0] || DEFAULT_PLACE),
+        fallback_response: fallbackResponse
+      }
+    },
+    null,
+    2
+  );
+
+  return [
+    {
+      role: "system",
+      content: basePrompt
+    },
+    {
+      role: "user",
+      content: userPrompt
+    }
+  ];
+}
+
+function placeSummary(place) {
+  if (!place) {
+    return DEFAULT_PLACE;
+  }
+
+  return {
+    id: place.id || DEFAULT_PLACE.id,
+    name: place.name || DEFAULT_PLACE.name,
+    safety_level: place.safety_level || DEFAULT_PLACE.safety_level,
+    description: place.description || DEFAULT_PLACE.description,
+    task_id: place.task_id || DEFAULT_PLACE.task_id
+  };
+}
+
+function buildDiaryMessages({ payload, fallbackResponse }) {
+  const diaryPrompt = readPromptFile(
+    "diary_prompt.txt",
+    "Write a short diary in strict JSON only."
+  );
+
+  return [
+    {
+      role: "system",
+      content: diaryPrompt
+    },
+    {
+      role: "user",
+      content: JSON.stringify(
+        {
+          visited_places: Array.isArray(payload.visited_places) ? payload.visited_places : [],
+          badges: Array.isArray(payload.badges) ? payload.badges : [],
+          mood_history: Array.isArray(payload.mood_history) ? payload.mood_history : [],
+          chat_summary: payload.chat_summary || "",
+          fallback_response: fallbackResponse
+        },
+        null,
+        2
+      )
+    }
+  ];
+}
+
+async function generateChatResponse(payload = {}) {
+  const safePayload = payload && typeof payload === "object" ? payload : {};
+  const persona = pickPersona(safePayload.persona_id);
+  const context = safePayload.context && typeof safePayload.context === "object" ? safePayload.context : {};
+  const location = normalizeLocation(safePayload.location);
+  const mode = safePayload.mode || "chat";
+  const emotion = detectEmotion(safePayload.user_text, context);
+  const nearbyPlaces = Array.isArray(safePayload.nearby_places) && safePayload.nearby_places.length > 0
+    ? safePayload.nearby_places
+    : getMockPlaces().slice(0, 4);
+  const place = pickPlace(nearbyPlaces);
+  const fallbackResponse = buildFallbackChatResponse({
+    persona,
+    location,
+    mode,
+    emotion,
+    place
+  });
+
+  if (!isLlmEnabled()) {
+    return fallbackResponse;
+  }
+
+  const llmResult = await generateStructuredJson({
+    messages: buildChatMessages({
+      payload: safePayload,
+      persona,
+      location,
+      mode,
+      emotion,
+      nearbyPlaces,
+      fallbackResponse
+    }),
+    normalizer: normalizeChatResponse,
+    fallbackValue: fallbackResponse
+  });
+
+  return normalizeChatResponse(llmResult.data);
+}
+
+async function generateDiary(payload = {}) {
+  const safePayload = payload && typeof payload === "object" ? payload : {};
+  const fallbackResponse = normalizeDiaryResponse(fallbackDiary(safePayload));
+
+  if (!isLlmEnabled()) {
+    return fallbackResponse;
+  }
+
+  const llmResult = await generateStructuredJson({
+    messages: buildDiaryMessages({
+      payload: safePayload,
+      fallbackResponse
+    }),
+    normalizer: normalizeDiaryResponse,
+    fallbackValue: fallbackResponse
+  });
+
+  return normalizeDiaryResponse(llmResult.data);
 }
 
 module.exports = {

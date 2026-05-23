@@ -7,7 +7,8 @@
   "scripts": {
     "dev": "nodemon server.js",
     "start": "node server.js",
-    "test:smoke": "powershell -ExecutionPolicy Bypass -File ./scripts/smoke_test.ps1"
+    "test:smoke": "powershell -ExecutionPolicy Bypass -File ./scripts/smoke_test.ps1",
+    "test:smoke:mock": "powershell -ExecutionPolicy Bypass -File ./scripts/smoke_test.ps1"
   },
   "dependencies": {
     "cors": "^2.8.5",

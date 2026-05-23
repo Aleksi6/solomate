@@ -41,6 +41,7 @@ try {
     $backendDir = Resolve-Path (Join-Path $PSScriptRoot "..")
     $baseUri = [System.Uri]$baseUrl
     $env:PORT = [string]$baseUri.Port
+    $env:LLM_ENABLE = "false"
     $startedProcess = Start-Process -FilePath "node" -ArgumentList $serverPath -WorkingDirectory $backendDir -WindowStyle Hidden -PassThru
 
     if (-not (Wait-ForHealth -Url $baseUrl)) {

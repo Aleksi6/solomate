@@ -4,9 +4,10 @@ const { fallbackDiary, normalizeDiaryResponse } = require("../utils/fallback");
 
 const router = express.Router();
 
-router.post("/generate-diary", (req, res) => {
+router.post("/generate-diary", async (req, res) => {
   try {
-    res.json(normalizeDiaryResponse(generateDiary(req.body || {})));
+    const response = await generateDiary(req.body || {});
+    res.json(normalizeDiaryResponse(response));
   } catch (error) {
     res.json(normalizeDiaryResponse(fallbackDiary()));
   }

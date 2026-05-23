@@ -27,7 +27,7 @@ function normalizeChatResponse(partial = {}) {
     next_options: Array.isArray(input.next_options) && input.next_options.length > 0
       ? input.next_options
       : DEFAULT_CHAT.next_options,
-    task_triggered: input.task_triggered || DEFAULT_CHAT.task_triggered
+    task_triggered: typeof input.task_triggered === "string" ? input.task_triggered : DEFAULT_CHAT.task_triggered
   };
 }
 
@@ -120,6 +120,27 @@ function normalizeDiaryResponse(partial = {}) {
   };
 }
 
+function parseJsonObject(text = "") {
+  if (!text || typeof text !== "string") {
+    return null;
+  }
+
+  try {
+    return JSON.parse(text);
+  } catch (error) {
+    const match = text.match(/\{[\s\S]*\}/);
+    if (!match) {
+      return null;
+    }
+
+    try {
+      return JSON.parse(match[0]);
+    } catch (nestedError) {
+      return null;
+    }
+  }
+}
+
 function fallbackForPath(path = "") {
   if (path.includes("/api/chat")) {
     return normalizeChatResponse();
@@ -156,5 +177,6 @@ module.exports = {
   normalizeTaskResponse,
   fallbackDiary,
   normalizeDiaryResponse,
-  fallbackForPath
+  fallbackForPath,
+  parseJsonObject
 };
