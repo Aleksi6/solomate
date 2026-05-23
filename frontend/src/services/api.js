@@ -1,3 +1,11 @@
+import {
+  getActiveCompanionProfile,
+  getMemoryFragments,
+  getRecentChatSummary,
+  getTravelMemorySummary,
+  getUserPreferenceProfile,
+} from '../utils/companionStorage'
+
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:3001"
 const REQUEST_TIMEOUT_MS = 5000
 
@@ -159,6 +167,43 @@ const withJsonHeaders = (options = {}) => ({
   },
 })
 
+const omitEmptyFields = (payload) =>
+  Object.fromEntries(
+    Object.entries(payload).filter(([, value]) => {
+      if (value === undefined || value === null || value === '') return false
+      if (Array.isArray(value)) return value.length > 0
+      if (typeof value === 'object') return Object.keys(value).length > 0
+      return true
+    }),
+  )
+
+const buildChatPayload = (payload = {}) =>
+  omitEmptyFields({
+    ...payload,
+    companion_profile: getActiveCompanionProfile() || payload.companion_profile,
+    user_preference_profile: getUserPreferenceProfile() || payload.user_preference_profile,
+    travel_memory_summary: getTravelMemorySummary() || payload.travel_memory_summary,
+    recent_chat_summary: getRecentChatSummary() || payload.recent_chat_summary,
+  })
+
+const buildDiaryPayload = (payload = {}) =>
+  omitEmptyFields({
+    ...payload,
+    memory_fragments:
+      Array.isArray(payload.memory_fragments) && payload.memory_fragments.length > 0
+        ? payload.memory_fragments
+        : getMemoryFragments().slice(-12),
+    mood_notes: Array.isArray(payload.mood_notes) ? payload.mood_notes : [],
+    companion_profile: getActiveCompanionProfile() || payload.companion_profile,
+    travel_memory_summary: getTravelMemorySummary() || payload.travel_memory_summary,
+  })
+
+const buildPhotoPayload = (payload = {}) =>
+  omitEmptyFields({
+    ...payload,
+    photo_mode: payload.photo_mode,
+  })
+
 export const safeFetch = async (path, options = {}, mockData) => {
   if (!API_BASE_URL) return mockData
 
@@ -187,7 +232,7 @@ export const sendChatMessage = async (payload) =>
     '/api/chat',
     withJsonHeaders({
       method: 'POST',
-      body: JSON.stringify(payload),
+      body: JSON.stringify(buildChatPayload(payload)),
     }),
     mockChatResponse,
   )
@@ -197,7 +242,7 @@ export const analyzePhoto = async (payload) =>
     '/api/analyze-photo',
     withJsonHeaders({
       method: 'POST',
-      body: JSON.stringify(payload),
+      body: JSON.stringify(buildPhotoPayload(payload)),
     }),
     mockPhotoResponse,
   )
@@ -217,7 +262,7 @@ export const generateDiary = async (payload) =>
     '/api/generate-diary',
     withJsonHeaders({
       method: 'POST',
-      body: JSON.stringify(payload),
+      body: JSON.stringify(buildDiaryPayload(payload)),
     }),
     mockDiaryResponse,
   )
