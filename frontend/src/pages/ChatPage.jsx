@@ -1,388 +1,163 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
-import { Camera, MapPin, Send, Shield, Sparkles, Trophy } from 'lucide-react'
-import ChatBubble from '../components/ChatBubble'
-import PlaceCard from '../components/PlaceCard'
-import TaskCard from '../components/TaskCard'
-import VoiceButton from '../components/VoiceButton'
-import VoiceCallPanel from '../components/VoiceCallPanel'
+import { useEffect, useMemo, useState } from 'react'
+import { getCompanionAvatar } from '../config/personaAssets'
+import useSpeechSynthesis from '../hooks/useSpeechSynthesis'
+import ChatComposer from '../components/ChatComposer'
+import ChatHeader from '../components/ChatHeader'
+import ChatMessageList from '../components/ChatMessageList'
+import NearbyRecommendPanel from '../components/NearbyRecommendPanel'
+import QuickActionBar from '../components/QuickActionBar'
 import { getMockPlaces, personas, sendChatMessage, tasks } from '../services/api'
+import { addMessage, addVisitedPlace, completeTask, getDemoState } from '../store/demoState'
 import {
-  addMessage,
-  addVisitedPlace,
-  completeTask as markTaskComplete,
-  getConversationId,
-  getDemoState,
-  initialConversationState,
-  setConversationState,
-} from '../store/demoState'
-import { getInitialChatGreeting, shouldShowInitialGreeting } from '../utils/greetingHelpers'
-
-const GEOLOCATION_TIMEOUT_MS = 2500
+  appendChatMessageForCompanion,
+  getActiveCompanionId,
+  getActiveCompanionProfile,
+  getChatHistoryForCompanion,
+  setActiveCompanionId,
+  setChatHistoryForCompanion,
+} from '../utils/companionStorage'
 
 const personaDisplay = {
-  gentle_friend: { name: '温柔朋友型', avatar: '🌤️' },
-  local_guide: { name: '本地向导型', avatar: '🧭' },
-  photo_buddy: { name: '摄影搭子型', avatar: '📸' },
-  budget_planner: { name: '省钱规划型', avatar: '💸' },
-  game_sprite: { name: '城市精灵型', avatar: '✨' },
+  gentle_friend: { name: '温柔朋友型', typeLabel: '轻声陪伴' },
+  local_guide: { name: '本地向导型', typeLabel: '城市熟门熟路' },
+  photo_buddy: { name: '摄影搭子型', typeLabel: '会看画面' },
+  budget_planner: { name: '省心规划型', typeLabel: '稳稳安排' },
+  game_sprite: { name: '任务精灵型', typeLabel: '边走边解锁' },
 }
 
-const formatTime = (timestamp = Date.now()) =>
-  new Intl.DateTimeFormat('zh-CN', {
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(new Date(timestamp))
-
-const toLocalIsoString = (date = new Date()) => {
-  const pad = (value) => String(value).padStart(2, '0')
-  const year = date.getFullYear()
-  const month = pad(date.getMonth() + 1)
-  const day = pad(date.getDate())
-  const hour = pad(date.getHours())
-  const minute = pad(date.getMinutes())
-  const second = pad(date.getSeconds())
-  const offsetMinutes = -date.getTimezoneOffset()
-  const sign = offsetMinutes >= 0 ? '+' : '-'
-  const offsetHours = pad(Math.floor(Math.abs(offsetMinutes) / 60))
-  const offsetRestMinutes = pad(Math.abs(offsetMinutes) % 60)
-
-  return `${year}-${month}-${day}T${hour}:${minute}:${second}${sign}${offsetHours}:${offsetRestMinutes}`
+const TEXT = {
+  now: '刚刚',
+  weatherFallback: '今天天气晴，慢慢走也很好',
+  weatherShort: '晴',
+  locationFallback: '城市中心一带',
+  locationSuffix: ' 一带',
+  customCompanion: '共创搭子',
 }
 
-const getTimeOfDay = (date = new Date()) => {
-  const hour = date.getHours()
+const formatRecentTime = () => TEXT.now
 
-  if (hour >= 5 && hour < 11) return 'morning'
-  if (hour >= 11 && hour < 14) return 'noon'
-  if (hour >= 14 && hour < 18) return 'afternoon'
-  if (hour >= 18 && hour < 22) return 'evening'
-  return 'night'
+const buildWeatherHint = (places) => (places[0] ? TEXT.weatherShort : TEXT.weatherFallback)
+
+const buildLocationHint = (places) => {
+  const firstPlace = places[0]
+  if (!firstPlace) return TEXT.locationFallback
+  return `${firstPlace.name}${TEXT.locationSuffix}`
 }
-
-const isLocationSensitivePrompt = (text = '') =>
-  /附近|周边|这边|这里|我的位置|我在哪|现在在哪|天气|下雨|带伞|防晒|穿什么|有啥好吃的|有什么好吃的|吃什么/.test(
-    String(text || ''),
-  )
-
-const buildHistoryPayload = (messages = []) =>
-  messages.slice(-12).map((message) => ({
-    role: message.role,
-    text: message.text,
-    timestamp: message.timestamp,
-    persona_id: message.persona_id,
-  }))
-
-const buildMockWeather = (timeOfDay = 'afternoon') => {
-  switch (timeOfDay) {
-    case 'morning':
-      return { condition: 'partly_cloudy', temperature_c: 22, rain_probability: 15, uv_index: 4, source: 'mock' }
-    case 'noon':
-      return { condition: 'sunny', temperature_c: 28, rain_probability: 10, uv_index: 7, source: 'mock' }
-    case 'evening':
-      return { condition: 'cloudy', temperature_c: 24, rain_probability: 25, uv_index: 1, source: 'mock' }
-    case 'night':
-      return { condition: 'cloudy', temperature_c: 21, rain_probability: 20, uv_index: 0, source: 'mock' }
-    default:
-      return { condition: 'cloudy', temperature_c: 26, rain_probability: 20, uv_index: 3, source: 'mock' }
-  }
-}
-
-const buildMockLocation = (conversationState = {}) => ({
-  city: conversationState.live_context?.city || conversationState.current_city || '',
-  place_name: conversationState.live_context?.place_name || conversationState.current_place || '',
-  latitude: conversationState.live_context?.latitude ?? null,
-  longitude: conversationState.live_context?.longitude ?? null,
-})
-
-const selectLiveNearbyPlaces = (places = [], conversationState = {}) => {
-  const pendingQuestion = conversationState.pending_question || conversationState.last_intent || ''
-  const source = Array.isArray(places) ? places : []
-
-  const scored = source.map((place) => {
-    let score = 0
-
-    if (pendingQuestion === 'food' && ['food', 'rest'].includes(place.type)) score += 4
-    if (pendingQuestion === 'photo' && ['culture', 'view'].includes(place.type)) score += 4
-    if (pendingQuestion === 'crowd' && place.safety_level === 'high') score += 3
-    if (place.safety_level === 'high') score += 2
-    score -= Number(place.distance || 0) / 1000
-
-    return { place, score }
-  })
-
-  return scored
-    .sort((a, b) => b.score - a.score)
-    .map((entry) => entry.place)
-    .slice(0, 6)
-}
-
-const buildLocationPayload = (conversationState = initialConversationState) => {
-  const liveContext = conversationState.live_context || {}
-  const city = liveContext.city || conversationState.current_city || ''
-  const placeName = liveContext.place_name || conversationState.current_place || ''
-  const latitude = liveContext.latitude
-  const longitude = liveContext.longitude
-
-  if (!city && !placeName && latitude == null && longitude == null) {
-    return {}
-  }
-
-  return {
-    city,
-    place_name: placeName,
-    lat: latitude,
-    lng: longitude,
-  }
-}
-
-const readBrowserLocation = () =>
-  new Promise((resolve) => {
-    if (typeof navigator === 'undefined' || !navigator.geolocation) {
-      resolve(null)
-      return
-    }
-
-    let settled = false
-    const done = (value) => {
-      if (settled) return
-      settled = true
-      resolve(value)
-    }
-
-    const timeoutId = window.setTimeout(() => done(null), GEOLOCATION_TIMEOUT_MS)
-
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        window.clearTimeout(timeoutId)
-        done({
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude,
-        })
-      },
-      () => {
-        window.clearTimeout(timeoutId)
-        done(null)
-      },
-      {
-        enableHighAccuracy: false,
-        timeout: GEOLOCATION_TIMEOUT_MS,
-        maximumAge: 60_000,
-      },
-    )
-  })
 
 function ChatPage() {
-  const [state, setState] = useState(() => getDemoState())
+  const [state, setState] = useState(getDemoState())
   const [places, setPlaces] = useState([])
-  const [inputText, setInputText] = useState('')
-  const [isComposing, setIsComposing] = useState(false)
+  const [text, setText] = useState('')
   const [isSending, setIsSending] = useState(false)
-  const [lastVoiceReply, setLastVoiceReply] = useState(null)
   const [replyMeta, setReplyMeta] = useState(null)
-  const transcriptRef = useRef(null)
+  const [isVoiceReplyEnabled, setIsVoiceReplyEnabled] = useState(true)
 
-  const persona = useMemo(() => state.selectedPersona || personas[0], [state.selectedPersona])
-  const displayPersona = useMemo(() => ({ ...persona, ...(personaDisplay[persona.id] || {}) }), [persona])
-  const initialGreeting = useMemo(() => getInitialChatGreeting({ persona, places }), [persona, places])
-  const showInitialGreeting = useMemo(() => shouldShowInitialGreeting(state.messages), [state.messages])
-  const activeTask = tasks[0]
+  const speechSynthesis = useSpeechSynthesis()
+  const activeCompanionId = useMemo(() => getActiveCompanionId() || state.selectedPersona?.id || personas[0].id, [state.selectedPersona])
+  const customCompanion = useMemo(() => getActiveCompanionProfile(), [activeCompanionId])
+  const fallbackPersona = useMemo(
+    () => personas.find((item) => item.id === activeCompanionId) || state.selectedPersona || personas[0],
+    [activeCompanionId, state.selectedPersona],
+  )
 
-  const refreshState = () => {
-    const nextState = getDemoState()
-    setState(nextState)
-    return nextState
-  }
-
-  const enrichConversationStateForSend = async (conversationState, options = {}) => {
-    const baseState = conversationState || initialConversationState
-    const now = new Date()
-    const localTime = toLocalIsoString(now)
-    const timeOfDay = getTimeOfDay(now)
-    const fallbackLocation = buildMockLocation(baseState)
-    const shouldTryLocation =
-      options.requestLocation === true ||
-      isLocationSensitivePrompt(options.userText) ||
-      (!baseState.live_context?.place_name && !baseState.live_context?.city)
-    const browserLocation = shouldTryLocation ? await readBrowserLocation() : null
-    const nearbyPlaces = selectLiveNearbyPlaces(options.availablePlaces || places, baseState)
-
-    const liveContext = {
-      ...(baseState.live_context || {}),
-      local_time: localTime,
-      time_of_day: timeOfDay,
-      location_source:
-        browserLocation?.latitude != null
-          ? 'browser'
-          : baseState.live_context?.location_source || baseState.live_context?.source || (baseState.current_place ? 'manual' : 'mock'),
-      source:
-        browserLocation?.latitude != null
-          ? 'browser'
-          : baseState.live_context?.location_source || baseState.live_context?.source || (baseState.current_place ? 'manual' : 'mock'),
-      latitude: browserLocation?.latitude ?? baseState.live_context?.latitude ?? fallbackLocation.latitude,
-      longitude: browserLocation?.longitude ?? baseState.live_context?.longitude ?? fallbackLocation.longitude,
-      city: baseState.live_context?.city || baseState.current_city || fallbackLocation.city,
-      place_name:
-        baseState.live_context?.place_name ||
-        baseState.current_place ||
-        (browserLocation?.latitude != null ? '当前位置' : '') ||
-        fallbackLocation.place_name,
-      weather: {
-        ...(baseState.live_context?.weather || {}),
-        ...buildMockWeather(timeOfDay),
-        ...(baseState.live_context?.weather?.condition ? baseState.live_context.weather : {}),
-      },
-      nearby_places: nearbyPlaces,
+  const displayCompanion = useMemo(() => {
+    if (customCompanion) {
+      return {
+        ...customCompanion,
+        avatar: <img className="persona-avatar-image chat-header-avatar-image" src={getCompanionAvatar(customCompanion)} alt={customCompanion.name || TEXT.customCompanion} />,
+        typeLabel: customCompanion.typeLabel || TEXT.customCompanion,
+      }
     }
 
     return {
-      ...baseState,
-      current_city: baseState.current_city || liveContext.city || '',
-      live_context: liveContext,
-      history_summary: baseState.history_summary || '',
+      ...fallbackPersona,
+      ...(personaDisplay[fallbackPersona.id] || {}),
+      avatar: (
+        <img
+          className="persona-avatar-image chat-header-avatar-image"
+          src={getCompanionAvatar(fallbackPersona)}
+          alt={personaDisplay[fallbackPersona.id]?.name || fallbackPersona.name || 'SoloMate'}
+        />
+      ),
     }
-  }
+  }, [customCompanion, fallbackPersona])
+
+  const companionMessages = useMemo(() => {
+    const storedMessages = getChatHistoryForCompanion(activeCompanionId)
+    if (storedMessages.length > 0) return storedMessages
+    return state.messages || []
+  }, [activeCompanionId, state.messages])
+
+  const weatherHint = useMemo(() => buildWeatherHint(places), [places])
+  const locationHint = useMemo(() => buildLocationHint(places), [places])
+  const activeTask = tasks[0]
 
   useEffect(() => {
-    let cancelled = false
+    setActiveCompanionId(activeCompanionId)
+  }, [activeCompanionId])
 
-    getMockPlaces().then(async (data) => {
-      if (cancelled) return
-
-      const nextPlaces = Array.isArray(data) ? data : []
-      setPlaces(nextPlaces)
-
-      const currentState = getDemoState().conversationState
-      const enrichedState = await enrichConversationStateForSend(
-        {
-          ...currentState,
-          live_context: {
-            ...(currentState.live_context || {}),
-            nearby_places: nextPlaces,
-          },
-        },
-        { requestLocation: true, availablePlaces: nextPlaces },
-      )
-
-      if (!cancelled) {
-        setConversationState(enrichedState)
-        refreshState()
-      }
-    })
-
-    return () => {
-      cancelled = true
-    }
+  useEffect(() => {
+    getMockPlaces().then(setPlaces)
   }, [])
 
   useEffect(() => {
-    const container = transcriptRef.current
-    if (!container) {
-      return
+    if (getChatHistoryForCompanion(activeCompanionId).length === 0 && state.messages?.length) {
+      setChatHistoryForCompanion(activeCompanionId, state.messages)
     }
+  }, [activeCompanionId, state.messages])
 
-    container.scrollTo({
-      top: container.scrollHeight,
-      behavior: 'smooth',
-    })
-  }, [state.messages])
+  const sendMessage = async (input = text) => {
+    if (isSending) return null
 
-  const sendMessage = async (userText = inputText, options = {}) => {
-    if (isSending) {
-      return null
-    }
+    const clean = input.trim()
+    if (!clean) return null
 
-    const cleanText = String(userText || '').trim()
-    if (!cleanText) {
-      return null
-    }
-
-    const conversationId = getConversationId()
-    const timestamp = new Date().toISOString()
-    const userMessage = {
-      id: crypto.randomUUID(),
-      role: 'user',
-      text: cleanText,
-      timestamp,
-      time: formatTime(timestamp),
-      persona_id: persona.id,
-    }
+    const userMessage = { id: crypto.randomUUID(), role: 'user', text: clean, time: formatRecentTime() }
+    const nextHistory = [...companionMessages, userMessage]
 
     addMessage(userMessage)
-    const stateAfterUser = refreshState()
-    setInputText('')
+    appendChatMessageForCompanion(activeCompanionId, userMessage)
+    setText('')
+    setState(getDemoState())
     setIsSending(true)
 
     try {
-      const enrichedConversationState = await enrichConversationStateForSend(stateAfterUser.conversationState, {
-        ...options,
-        requestLocation: options.requestLocation === true || isLocationSensitivePrompt(cleanText),
-        userText: cleanText,
-      })
-      setConversationState(enrichedConversationState)
-
-      const payload = {
-        conversation_id: conversationId,
-        user_text: cleanText,
-        persona_id: persona.id,
-        mode: options.mode || 'chat',
-        location: buildLocationPayload(enrichedConversationState),
+      const reply = await sendChatMessage({
+        user_text: clean,
+        persona_id: fallbackPersona.id,
+        mode: 'decision',
         context: {
-          travel_mode: enrichedConversationState.travel_mode || 'solo',
-          mood: enrichedConversationState.mood || 'uncertain',
-          source: options.source || 'text',
-          local_time: enrichedConversationState.live_context.local_time,
-          time_of_day: enrichedConversationState.live_context.time_of_day,
+          travel_mode: 'solo',
+          mood: 'uncertain',
         },
-        nearby_places:
-          enrichedConversationState.live_context.nearby_places?.length > 0
-            ? enrichedConversationState.live_context.nearby_places
-            : places,
-        history: buildHistoryPayload(stateAfterUser.messages),
-        conversation_state: enrichedConversationState,
-        live_context: enrichedConversationState.live_context,
-      }
+        nearby_places: places,
+        history: nextHistory,
+      })
 
-      const reply = await sendChatMessage(payload)
-      const safeReply = reply && typeof reply === 'object' ? reply : {}
-
-      const assistantTimestamp = new Date().toISOString()
-      const assistantMessage = {
+      const buddyMessage = {
         id: crypto.randomUUID(),
-        role: 'assistant',
-        text: safeReply.reply_text || '我在，刚刚这条消息没有接稳。你再发一句，我继续陪你接上。',
-        timestamp: assistantTimestamp,
-        time: formatTime(assistantTimestamp),
-        persona_id: persona.id,
-        reply_type: safeReply.reply_type || '',
-        emotion_detected: safeReply.emotion_detected || '',
+        role: 'buddy',
+        text: reply.reply_text,
+        time: formatRecentTime(),
       }
 
-      addMessage(assistantMessage)
-      markTaskComplete('first_voice_task', activeTask.rewardBadge)
-
-      const latestConversationState = getDemoState().conversationState
-      setConversationState({
-        ...latestConversationState,
-        last_intent: safeReply.reply_type || latestConversationState.last_intent || '',
-        mood: safeReply.emotion_detected || latestConversationState.mood || '',
-        pending_question: '',
-        live_context: enrichedConversationState.live_context,
-      })
-
+      addMessage(buddyMessage)
+      appendChatMessageForCompanion(activeCompanionId, buddyMessage)
+      completeTask('first_voice_task', activeTask.rewardBadge)
       setReplyMeta({
-        nextOptions: safeReply.next_options || [],
-        safetyTip: safeReply.safety_tip || '',
-        taskTriggered: safeReply.task_triggered || '',
-        emotionDetected: safeReply.emotion_detected || '',
+        nextOptions: reply.next_options || [],
+        safetyTip: reply.safety_tip || '',
+        taskTriggered: reply.task_triggered || '',
       })
+      setState(getDemoState())
 
-      if (options.source === 'voice') {
-        setLastVoiceReply(assistantMessage)
+      if (isVoiceReplyEnabled) {
+        speechSynthesis.speak(reply.reply_text)
+      } else {
+        speechSynthesis.cancel()
       }
 
-      refreshState()
-      return assistantMessage
+      return buddyMessage
     } finally {
       setIsSending(false)
     }
@@ -391,163 +166,70 @@ function ChatPage() {
   const triggeredTask = tasks.find((task) => task.id === replyMeta?.taskTriggered)
 
   return (
-    <section className="page chat-page companion-call-page diffuse-bg">
-      <header className="chat-header call-header">
-        <span className="avatar-bubble">{displayPersona.avatar}</span>
-        <div>
-          <p className="eyebrow">陪伴通话</p>
-          <h1>{displayPersona.name}</h1>
-        </div>
-      </header>
+    <section className="page chat-page mobile-chat-page diffuse-bg">
+      <div className="chat-mobile-layout">
+        <ChatHeader
+          companion={displayCompanion}
+          isVoiceReplyEnabled={isVoiceReplyEnabled}
+          weatherHint={weatherHint}
+          locationHint={locationHint}
+          onToggleVoiceReply={() => {
+            if (isVoiceReplyEnabled) speechSynthesis.cancel()
+            setIsVoiceReplyEnabled((current) => !current)
+          }}
+        />
 
-      {showInitialGreeting && (
-        <section className="chat-greeting-panel glass-card" aria-label="聊天欢迎区">
-          <p className="eyebrow">{initialGreeting.weatherHint}</p>
-          <h2>{initialGreeting.welcome}</h2>
-          <div className="suggestion-row">
-            {initialGreeting.suggestions.map((suggestion) => (
-              <button
-                key={suggestion}
-                type="button"
-                className="pill-button"
-                onClick={() => sendMessage(suggestion, { source: 'quick-action' })}
-                disabled={isSending}
-              >
-                {suggestion}
-              </button>
-            ))}
-          </div>
-        </section>
-      )}
+        <ChatMessageList messages={companionMessages} />
 
-      <VoiceCallPanel
-        isSending={isSending}
-        lastReply={lastVoiceReply}
-        onSendMessage={(text) => sendMessage(text, { source: 'voice', requestLocation: true })}
-        persona={displayPersona}
-      />
-
-      {replyMeta && (
-        <section className="call-assistant-stack" aria-label="搭子建议">
-          {replyMeta.safetyTip && (
-            <article className="call-safety-card glass-card">
-              <div className="call-card-icon">
-                <Shield size={18} />
-              </div>
-              <div>
+        {(replyMeta?.safetyTip || replyMeta?.nextOptions?.length > 0 || triggeredTask) && (
+          <section className="chat-meta-strip" aria-label="搭子提示">
+            {replyMeta?.safetyTip ? (
+              <article className="chat-meta-card glass-card">
                 <p className="eyebrow">安全提醒</p>
                 <p>{replyMeta.safetyTip}</p>
-              </div>
-            </article>
-          )}
+              </article>
+            ) : null}
 
-          {replyMeta.nextOptions?.length > 0 && (
-            <article className="call-next-card glass-card">
-              <div className="call-card-heading">
-                <Sparkles size={18} />
-                <h2>下一步建议</h2>
-              </div>
-              <div className="suggestion-row">
-                {replyMeta.nextOptions.map((option) => (
-                  <button
-                    key={option}
-                    type="button"
-                    className="pill-button"
-                    onClick={() => sendMessage(option, { source: 'quick-action' })}
-                    disabled={isSending}
-                  >
-                    {option}
-                  </button>
-                ))}
-              </div>
-            </article>
-          )}
+            {replyMeta?.nextOptions?.length > 0 ? (
+              <article className="chat-meta-card glass-card">
+                <p className="eyebrow">下一步建议</p>
+                <div className="chat-inline-actions">
+                  {replyMeta.nextOptions.map((option) => (
+                    <button key={option} type="button" className="pill-button" onClick={() => sendMessage(option)}>
+                      {option}
+                    </button>
+                  ))}
+                </div>
+              </article>
+            ) : null}
 
-          {triggeredTask && (
-            <article className="call-task-card glass-card">
-              <div className="call-card-heading">
-                <MapPin size={18} />
-                <h2>这段路的小任务</h2>
-              </div>
-              <p>{triggeredTask.title}</p>
-              <span>{triggeredTask.description}</span>
-            </article>
-          )}
-        </section>
-      )}
+            {triggeredTask ? (
+              <article className="chat-meta-card glass-card">
+                <p className="eyebrow">任务触发</p>
+                <p>{triggeredTask.title}</p>
+              </article>
+            ) : null}
+          </section>
+        )}
 
-      <div ref={transcriptRef} className="chat-window call-transcript glass-card">
-        {state.messages.map((message) => (
-          <ChatBubble key={message.id} message={message} />
-        ))}
-      </div>
+        <ChatComposer disabled={false} isSubmitting={isSending} text={text} onChange={setText} onSubmit={() => sendMessage()} onVoiceMessage={sendMessage} />
 
-      <form
-        className="composer"
-        onSubmit={(event) => {
-          event.preventDefault()
-          sendMessage()
-        }}
-      >
-        <textarea
-          className="composer-input"
-          value={inputText}
-          onChange={(event) => setInputText(event.target.value)}
-          onCompositionStart={() => setIsComposing(true)}
-          onCompositionEnd={() => setIsComposing(false)}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing && !isComposing) {
-              event.preventDefault()
-              sendMessage()
-            }
+        <QuickActionBar />
+
+        <NearbyRecommendPanel
+          places={places}
+          activeTask={activeTask}
+          done={state.completedTasks.includes(activeTask.id)}
+          onVisit={(placeId) => {
+            addVisitedPlace(placeId)
+            setState(getDemoState())
           }}
-          rows={1}
-          placeholder="说说你现在在哪，或者想去哪。"
-          aria-label="聊天输入框"
-          disabled={isSending}
+          onComplete={(task) => {
+            completeTask(task.id, task.rewardBadge)
+            setState(getDemoState())
+          }}
         />
-        <button type="submit" aria-label="发送" disabled={isSending}>
-          <Send size={19} />
-        </button>
-      </form>
-
-      <div className="action-row">
-        <VoiceButton
-          label="说出当前位置"
-          onClick={() => sendMessage('我在这里，看看附近有什么。', { source: 'quick-action', requestLocation: true })}
-        />
-        <Link className="icon-link" to="/photo">
-          <Camera size={18} />
-          拍照发给搭子
-        </Link>
-        <Link className="icon-link" to="/badges">
-          <Trophy size={18} />
-          看看徽章
-        </Link>
       </div>
-
-      <h2>附近适合停一停</h2>
-      <div className="card-stack">
-        {places.map((place) => (
-          <PlaceCard
-            key={place.id}
-            place={place}
-            onVisit={(placeId) => {
-              addVisitedPlace(placeId)
-              refreshState()
-            }}
-          />
-        ))}
-      </div>
-
-      <TaskCard
-        task={activeTask}
-        done={state.completedTasks.includes(activeTask.id)}
-        onComplete={(task) => {
-          markTaskComplete(task.id, task.rewardBadge)
-          refreshState()
-        }}
-      />
     </section>
   )
 }

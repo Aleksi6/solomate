@@ -562,7 +562,7 @@ export const sendChatMessage = async (payload) =>
     '/api/chat',
     withJsonHeaders({
       method: 'POST',
-      body: JSON.stringify(payload),
+      body: JSON.stringify(buildChatPayload(payload)),
     }),
     () => buildMockChatResponse(payload),
   )
@@ -589,7 +589,7 @@ export const analyzePhoto = async (payload = {}) => {
     '/api/analyze-photo',
     withJsonHeaders({
       method: 'POST',
-      body: JSON.stringify(payload),
+      body: JSON.stringify(buildPhotoPayload(payload)),
     }),
     () => buildMockPhotoResponse(payload),
   )
@@ -610,7 +610,7 @@ export const generateDiary = async (payload) =>
     '/api/generate-diary',
     withJsonHeaders({
       method: 'POST',
-      body: JSON.stringify(payload),
+      body: JSON.stringify(buildDiaryPayload(payload)),
     }),
     mockDiaryResponse,
   )

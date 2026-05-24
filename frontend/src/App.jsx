@@ -1,19 +1,22 @@
 import { BrowserRouter, NavLink, Navigate, Route, Routes } from 'react-router-dom'
-import { BookOpen, Camera, Home, MessageCircle, Trophy, Users } from 'lucide-react'
+import { BookOpen, Home, Trophy, Users } from 'lucide-react'
 import FloatingBuddy from './components/FloatingBuddy'
-import HomePage from './pages/HomePage'
-import PersonaPage from './pages/PersonaPage'
-import ChatPage from './pages/ChatPage'
-import PhotoPage from './pages/PhotoPage'
 import BadgePage from './pages/BadgePage'
+import ChatPage from './pages/ChatPage'
+import CompanionSelectPage from './pages/CompanionSelectPage'
+import DiaryDetailPage from './pages/DiaryDetailPage'
 import DiaryPage from './pages/DiaryPage'
+import HomePage from './pages/HomePage'
+import MomentPage from './pages/MomentPage'
+import PersonaPage from './pages/PersonaPage'
+import PersonaQuizPage from './pages/PersonaQuizPage'
+import PhotoPage from './pages/PhotoPage'
+import { personas } from './services/api'
 
 const tabs = [
-  { to: '/', label: '首页', icon: Home },
+  { to: '/', label: '今日', icon: Home },
   { to: '/persona', label: '搭子', icon: Users },
-  { to: '/chat', label: '通话', icon: MessageCircle },
-  { to: '/photo', label: '拍照', icon: Camera },
-  { to: '/badges', label: '碎片', icon: Trophy },
+  { to: '/memory', label: '记忆', icon: Trophy },
   { to: '/diary', label: '手账', icon: BookOpen },
 ]
 
@@ -24,11 +27,20 @@ function App() {
         <main className="page-frame">
           <Routes>
             <Route path="/" element={<HomePage />} />
+            <Route path="/home" element={<Navigate to="/" replace />} />
             <Route path="/persona" element={<PersonaPage />} />
+            <Route path="/companions" element={<Navigate to="/persona" replace />} />
+            <Route path="/persona/quiz" element={<PersonaQuizPage fixedCompanions={personas} onBack={() => window.history.back()} onComplete={() => window.history.back()} />} />
+            <Route path="/persona-quiz" element={<Navigate to="/persona/quiz" replace />} />
+            <Route path="/companion-select" element={<CompanionSelectPage />} />
             <Route path="/chat" element={<ChatPage />} />
+            <Route path="/chat/:companionId" element={<ChatPage />} />
             <Route path="/photo" element={<PhotoPage />} />
+            <Route path="/moment" element={<MomentPage />} />
+            <Route path="/memory" element={<BadgePage />} />
             <Route path="/badges" element={<BadgePage />} />
             <Route path="/diary" element={<DiaryPage />} />
+            <Route path="/diary/detail" element={<DiaryDetailPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </main>
