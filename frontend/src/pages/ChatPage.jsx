@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useEffectEvent, useMemo, useState } from 'react'
+import { useParams } from 'react-router-dom'
 import { getCompanionAvatar } from '../config/personaAssets'
 import useSpeechSynthesis from '../hooks/useSpeechSynthesis'
 import ChatComposer from '../components/ChatComposer'
@@ -8,16 +9,20 @@ import NearbyRecommendPanel from '../components/NearbyRecommendPanel'
 import QuickActionBar from '../components/QuickActionBar'
 import { getMockPlaces, personas, requestProactiveCare, sendChatMessage, tasks } from '../services/api'
 import {
-  addMessage,
   addVisitedPlace,
   completeTask,
-  getConversationId,
   getDemoState,
-  getProactiveMeta,
-  markProactiveMessage,
-  setConversationState,
 } from '../store/demoState'
-import { getActiveCompanionId, getActiveCompanionProfile, setActiveCompanionId } from '../utils/companionStorage'
+import {
+  addCompanionMessage,
+  getCompanionConversationId,
+  getCompanionConversationState,
+  getCompanionMessages,
+  getCompanionProactiveMeta,
+  markCompanionProactiveMessage,
+  setCompanionConversationState,
+} from '../utils/companionConversationStorage'
+import { getActiveCompanionId, getCompanionById, setActiveCompanionId } from '../utils/companionStorage'
 
 const PROACTIVE_COOLDOWN_MS = 180 * 1000
 const PROACTIVE_AFTER_USER_MS = 60 * 1000
@@ -132,8 +137,15 @@ const buildConversationStateForSend = (conversationState = {}, places = []) => {
   }
 }
 
+const applySharedJourneyContext = (conversationState = {}, sharedState = {}) => ({
+  ...conversationState,
+  badges: Array.isArray(sharedState.badges) ? [...sharedState.badges] : conversationState.badges || [],
+  visited_places: Array.isArray(sharedState.visitedPlaces) ? [...sharedState.visitedPlaces] : conversationState.visited_places || [],
+})
+
 function ChatPage() {
-  const [state, setState] = useState(() => getDemoState())
+  const { companionId: routeCompanionId = '' } = useParams()
+  const [, setRefreshToken] = useState(0)
   const [places, setPlaces] = useState([])
   const [text, setText] = useState('')
   const [isSending, setIsSending] = useState(false)
@@ -141,12 +153,21 @@ function ChatPage() {
   const [isVoiceReplyEnabled, setIsVoiceReplyEnabled] = useState(true)
 
   const speechSynthesis = useSpeechSynthesis()
-  const activeCompanionId = useMemo(() => getActiveCompanionId() || state.selectedPersona?.id || personas[0].id, [state.selectedPersona])
-  const customCompanion = useMemo(() => getActiveCompanionProfile(), [activeCompanionId])
-  const fallbackPersona = useMemo(
-    () => personas.find((item) => item.id === activeCompanionId) || state.selectedPersona || personas[0],
-    [activeCompanionId, state.selectedPersona],
-  )
+  const baseSharedState = getDemoState()
+  const activeCompanionId = routeCompanionId || getActiveCompanionId() || baseSharedState.selectedPersona?.id || personas[0].id
+  const customCompanion = getCompanionById(activeCompanionId)
+  const fallbackPersona = personas.find((item) => item.id === activeCompanionId) || baseSharedState.selectedPersona || personas[0]
+  const servicePersonaId = customCompanion?.persona_id || fallbackPersona.id
+  const readCurrentState = () => {
+    const sharedState = getDemoState()
+    return {
+      sharedState,
+      messages: getCompanionMessages(activeCompanionId, servicePersonaId),
+      conversationState: applySharedJourneyContext(getCompanionConversationState(activeCompanionId, sharedState.badges), sharedState),
+    }
+  }
+  const state = readCurrentState()
+  const refreshView = () => setRefreshToken((current) => current + 1)
 
   const displayCompanion = useMemo(() => {
     if (customCompanion) {
@@ -174,19 +195,13 @@ function ChatPage() {
   const locationHint = useMemo(() => buildLocationHint(state.conversationState, places), [state.conversationState, places])
   const activeTask = tasks[0]
 
-  const refreshState = () => {
-    const nextState = getDemoState()
-    setState(nextState)
-    return nextState
-  }
-
-  const checkProactiveCare = async (force = false) => {
+  const checkProactiveCare = useEffectEvent(async (force = false) => {
     if (isSending) return
 
-    const currentState = getDemoState()
+    const currentState = readCurrentState()
     if (!currentState.messages?.length) return
 
-    const meta = getProactiveMeta()
+    const meta = getCompanionProactiveMeta(activeCompanionId)
     const now = Date.now()
     const lastProactiveAt = meta.lastProactiveAt ? new Date(meta.lastProactiveAt).getTime() : 0
     const lastUserMessageAt = meta.lastUserMessageAt ? new Date(meta.lastUserMessageAt).getTime() : 0
@@ -200,8 +215,8 @@ function ChatPage() {
     const enrichedConversationState = buildConversationStateForSend(currentState.conversationState, places)
 
     const response = await requestProactiveCare({
-      conversation_id: getConversationId(),
-      persona_id: fallbackPersona.id,
+      conversation_id: getCompanionConversationId(activeCompanionId),
+      persona_id: servicePersonaId,
       conversation_state: enrichedConversationState,
       history: buildHistoryPayload(currentState.messages),
       live_context: enrichedConversationState.live_context,
@@ -210,20 +225,27 @@ function ChatPage() {
     if (!response?.should_send || !response?.message) return
 
     const timestamp = new Date().toISOString()
-    addMessage({
-      id: crypto.randomUUID(),
-      role: 'assistant',
-      text: response.message,
-      time: formatRecentTime(timestamp),
-      timestamp,
-      persona_id: fallbackPersona.id,
-      message_type: 'proactive',
-      reply_type: 'proactive',
-      emotion_detected: enrichedConversationState.mood || 'uncertain',
-    })
-    markProactiveMessage(timestamp)
-    refreshState()
-  }
+    addCompanionMessage(
+      activeCompanionId,
+      {
+        id: crypto.randomUUID(),
+        role: 'assistant',
+        text: response.message,
+        time: formatRecentTime(timestamp),
+        timestamp,
+        persona_id: servicePersonaId,
+        message_type: 'proactive',
+        reply_type: 'proactive',
+        emotion_detected: enrichedConversationState.mood || 'uncertain',
+      },
+      {
+        fallbackPersonaId: servicePersonaId,
+        sharedBadges: currentState.sharedState.badges,
+      },
+    )
+    markCompanionProactiveMessage(activeCompanionId, timestamp)
+    refreshView()
+  })
 
   useEffect(() => {
     setActiveCompanionId(activeCompanionId)
@@ -234,10 +256,6 @@ function ChatPage() {
     getMockPlaces().then((data) => {
       if (cancelled) return
       setPlaces(Array.isArray(data) ? data : [])
-      const currentState = getDemoState()
-      const enrichedConversationState = buildConversationStateForSend(currentState.conversationState, Array.isArray(data) ? data : [])
-      setConversationState(enrichedConversationState)
-      refreshState()
     })
 
     return () => {
@@ -256,7 +274,7 @@ function ChatPage() {
       window.clearInterval(intervalId)
       delete window.solomateCheckProactiveCare
     }
-  }, [places, isSending, fallbackPersona.id, state.messages, state.conversationState])
+  }, [places, isSending, servicePersonaId, state.messages, state.conversationState])
 
   const sendMessage = async (input = text, options = {}) => {
     if (isSending) return null
@@ -271,22 +289,26 @@ function ChatPage() {
       text: clean,
       time: formatRecentTime(timestamp),
       timestamp,
-      persona_id: fallbackPersona.id,
+      persona_id: servicePersonaId,
     }
 
-    addMessage(userMessage)
+    addCompanionMessage(activeCompanionId, userMessage, {
+      fallbackPersonaId: servicePersonaId,
+      sharedBadges: state.sharedState.badges,
+    })
     setText('')
-    const stateAfterUser = refreshState()
+    const stateAfterUser = readCurrentState()
+    refreshView()
     setIsSending(true)
 
     try {
       const enrichedConversationState = buildConversationStateForSend(stateAfterUser.conversationState, places)
-      setConversationState(enrichedConversationState)
+      setCompanionConversationState(activeCompanionId, enrichedConversationState, stateAfterUser.sharedState.badges)
 
       const payload = {
-        conversation_id: getConversationId(),
+        conversation_id: getCompanionConversationId(activeCompanionId),
         user_text: clean,
-        persona_id: fallbackPersona.id,
+        persona_id: servicePersonaId,
         mode: options.mode || 'chat',
         location: buildLocationPayload(enrichedConversationState),
         context: {
@@ -310,19 +332,22 @@ function ChatPage() {
         text: safeReply.reply_text || '我接住你这句话了，不过这次回复没有顺利回来。你再发一句，我继续陪你。',
         time: formatRecentTime(assistantTimestamp),
         timestamp: assistantTimestamp,
-        persona_id: fallbackPersona.id,
+        persona_id: servicePersonaId,
         reply_type: safeReply.reply_type || '',
         emotion_detected: safeReply.emotion_detected || '',
       }
 
-      addMessage(buddyMessage)
+      addCompanionMessage(activeCompanionId, buddyMessage, {
+        fallbackPersonaId: servicePersonaId,
+        sharedBadges: stateAfterUser.sharedState.badges,
+      })
       completeTask('first_voice_task', activeTask.rewardBadge)
       setReplyMeta({
         nextOptions: safeReply.next_options || [],
         safetyTip: safeReply.safety_tip || '',
         taskTriggered: safeReply.task_triggered || '',
       })
-      refreshState()
+      refreshView()
 
       if (isVoiceReplyEnabled && buddyMessage.text) {
         speechSynthesis.speak(buddyMessage.text)
@@ -401,14 +426,14 @@ function ChatPage() {
         <NearbyRecommendPanel
           places={places}
           activeTask={activeTask}
-          done={state.completedTasks.includes(activeTask.id)}
+          done={state.sharedState.completedTasks.includes(activeTask.id)}
           onVisit={(placeId) => {
             addVisitedPlace(placeId)
-            refreshState()
+            refreshView()
           }}
           onComplete={(task) => {
             completeTask(task.id, task.rewardBadge)
-            refreshState()
+            refreshView()
           }}
         />
       </div>

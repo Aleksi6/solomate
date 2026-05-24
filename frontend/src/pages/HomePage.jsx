@@ -97,7 +97,7 @@ function HomePage() {
         <div className="page-intro home-task-intro">
           <p className="eyebrow">Today's Tasks</p>
           <h2>今日可解锁任务</h2>
-          <p className="page-subtitle">左右滑着看，把今天的小目标慢慢收进记忆里。</p>
+          <p className="page-subtitle">往下滑着看，把今天的小目标慢慢收进记忆里。</p>
         </div>
 
         <div className="home-task-list" aria-label="今日可解锁任务">
