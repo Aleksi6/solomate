@@ -232,6 +232,20 @@ const mockLiveContextStatus = {
   fallback: 'mock live_context',
 }
 
+const mockWeatherStatus = {
+  weather_enable: true,
+  weather_provider: 'open_meteo',
+  requires_api_key: false,
+  fallback: 'mock weather',
+}
+
+const mockProactiveCareStatus = {
+  enabled: true,
+  mode: 'foreground_timer',
+  max_per_day: 5,
+  cooldown_seconds: 180,
+}
+
 const withJsonHeaders = (options = {}) => ({
   ...options,
   headers: {
@@ -239,6 +253,71 @@ const withJsonHeaders = (options = {}) => ({
     ...(options.headers || {}),
   },
 })
+
+const buildChatPayload = (payload = {}) => ({
+  conversation_id: payload.conversation_id || '',
+  user_text: payload.user_text || '',
+  persona_id: payload.persona_id || 'gentle_friend',
+  mode: payload.mode || 'chat',
+  location: payload.location || {},
+  context: payload.context || {},
+  nearby_places: Array.isArray(payload.nearby_places) ? payload.nearby_places : [],
+  history: Array.isArray(payload.history) ? payload.history : [],
+  conversation_state: payload.conversation_state || {},
+  live_context: payload.live_context || {},
+})
+
+const buildPhotoPayload = (payload = {}) => ({
+  task_id: payload.task_id || 'firework_photo_task',
+  persona_id: payload.persona_id || 'photo_buddy',
+  user_question: payload.user_question || '',
+})
+
+const buildDiaryPayload = (payload = {}) => ({
+  visited_places: Array.isArray(payload.visited_places) ? payload.visited_places : [],
+  badges: Array.isArray(payload.badges) ? payload.badges : [],
+  mood_history: Array.isArray(payload.mood_history) ? payload.mood_history : [],
+  chat_summary: payload.chat_summary || '',
+})
+
+const buildMockProactiveCare = (payload = {}) => {
+  const state = payload.conversation_state || {}
+  const liveContext = payload.live_context || state.live_context || {}
+  const weather = liveContext.weather || {}
+  const targetPlace = state.target_place || state.current_place || ''
+  const timeOfDay = liveContext.time_of_day || 'afternoon'
+
+  if (Number(weather.rain_probability) >= 50) {
+    return {
+      should_send: true,
+      message: weather.source === 'open_meteo'
+        ? '按当前天气信息看，等会儿可能会有雨。出门前把伞带上吧，我陪你慢慢走。'
+        : '按当前 Demo 天气信息看，等会儿可能会有雨。出门前把伞带上，会更安心一点。',
+      reason: 'rain_reminder',
+      cooldown_seconds: 180,
+    }
+  }
+
+  if (timeOfDay === 'night') {
+    return {
+      should_send: true,
+      message: targetPlace
+        ? `已经有点晚了。如果还要往${targetPlace}那边走，我们尽量挑亮一点、主路更清楚的方向。`
+        : '已经有点晚了。接下来尽量走亮一点的路，如果你要继续逛，我可以陪你把回程也一起想好。',
+      reason: 'night_safety',
+      cooldown_seconds: 180,
+    }
+  }
+
+  return {
+    should_send: true,
+    message: targetPlace
+      ? `你刚刚提到${targetPlace}，我还记着。要不要这轮先定一个方向：路线、拍照还是吃的？`
+      : '我还在这儿。要是你想继续走下去，我们可以只先决定下一小步，不用一下子把整段路都想完。',
+    reason: 'gentle_check_in',
+    cooldown_seconds: 180,
+  }
+}
 
 const cleanPlaceCandidate = (value = '') => {
   let place = String(value || '').trim()
@@ -267,6 +346,7 @@ const extractExplicitPlace = (userText = '') => {
   for (const pattern of patterns) {
     const match = text.match(pattern)
     const place = cleanPlaceCandidate(match?.[1] || '')
+    if (/^(我现在|我这边|我这里|当前位置)$/.test(place)) continue
     if (place) return place
   }
 
@@ -359,7 +439,7 @@ const buildMockChatResponse = (payload = {}) => {
     ''
   const weather = liveContext.weather || {}
   const timeOfDay = liveContext.time_of_day || ''
-  const locationSource = liveContext.source || 'unavailable'
+  const locationSource = liveContext.location_source || liveContext.source || 'none'
 
   if (intent === 'identity') {
     return {
@@ -462,6 +542,18 @@ const buildMockChatResponse = (payload = {}) => {
     }
   }
 
+  if (intent === 'food') {
+    return {
+      reply_text: '如果你现在还不想开定位，也没关系。你告诉我一个大概地点，比如商圈、地铁站、景点或你住的附近，我就能把吃的收得更准一点；如果只是想先想方向，我也可以先按正餐、小吃、咖啡这三类帮你挑。',
+      reply_type: 'food_advice',
+      emotion_detected: 'uncertain',
+      suggested_action: 'find_food_nearby',
+      safety_tip: timeOfDay === 'night' ? '夜里找吃的别为了绕路走太偏，优先亮一点、进出方便的店。' : '一个人找吃的时，优先选明亮、开阔、进出方便的店。',
+      next_options: ['我在地铁站附近', '想吃正餐', '想吃小吃'],
+      task_triggered: '',
+    }
+  }
+
   if (intent === 'story' && effectivePlace) {
     return {
       reply_text: /[江河湖海滩湾港桥]/.test(effectivePlace)
@@ -556,6 +648,8 @@ export const getLlmStatus = async () => safeFetch('/api/llm-status', { method: '
 export const getVisionStatus = async () => safeFetch('/api/vision-status', { method: 'GET' }, mockVisionStatus)
 export const getVoiceStatus = async () => safeFetch('/api/voice-status', { method: 'GET' }, mockVoiceStatus)
 export const getLiveContextStatus = async () => safeFetch('/api/live-context-status', { method: 'GET' }, mockLiveContextStatus)
+export const getWeatherStatus = async () => safeFetch('/api/weather-status', { method: 'GET' }, mockWeatherStatus)
+export const getProactiveCareStatus = async () => safeFetch('/api/proactive-care-status', { method: 'GET' }, mockProactiveCareStatus)
 
 export const sendChatMessage = async (payload) =>
   safeFetch(
@@ -565,6 +659,16 @@ export const sendChatMessage = async (payload) =>
       body: JSON.stringify(buildChatPayload(payload)),
     }),
     () => buildMockChatResponse(payload),
+  )
+
+export const requestProactiveCare = async (payload) =>
+  safeFetch(
+    '/api/proactive-care',
+    withJsonHeaders({
+      method: 'POST',
+      body: JSON.stringify(buildChatPayload(payload)),
+    }),
+    () => buildMockProactiveCare(payload),
   )
 
 export const analyzePhoto = async (payload = {}) => {

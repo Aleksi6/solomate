@@ -8,7 +8,7 @@ const {
 } = require("../utils/fallback");
 const { generateStructuredJson, isLlmEnabled } = require("./llm_service");
 const { DEFAULT_PLACE, getMockPlaces, getRelevantNearbyPlaces, normalizePlace } = require("./place_service");
-const { inferTimeOfDay, resolveWeatherContext } = require("./weather_service");
+const { enrichWeatherContext, inferTimeOfDay, resolveWeatherContext } = require("./weather_service");
 
 const DEFAULT_PERSONA = {
   id: "gentle_friend",
@@ -143,6 +143,10 @@ function cleanPlaceCandidate(value = "") {
   place = place.replace(/(附近|周边)+$/g, "");
   place = place.trim();
 
+  if (/^(我现在|我这边|我这里|当前位置)$/.test(place)) {
+    return "";
+  }
+
   if (!place || place.length > 16 || PLACE_STOP_WORDS.has(place)) {
     return "";
   }
@@ -250,6 +254,36 @@ function extractExplicitPlace(userText = "") {
   return "";
 }
 
+function extractExplicitPlaceSmart(userText = "") {
+  const text = String(userText || "").trim();
+  if (!text) {
+    return "";
+  }
+
+  const patterns = [
+    /(?:我现在在|我其实想去|我又想去|我想去|我要去|准备去|想去)([^，。？?！!、\s\n]{1,16})/,
+    /(?:去)([^，。？?！!、\s\n]{1,16})(?:玩|逛|看看|打卡)?/,
+    /(?:到)([^，。？?！!、\s\n]{1,16})了/,
+    /(?:我在)([^，。？?！!、\s\n]{1,16})/,
+    /(?:想找|想吃|想喝)([^，。？?！!、\s\n]{1,16})/,
+    /([^，。？?！!、\s\n]{1,16})附近(?:有什么|有啥|有什么好吃的|哪里好拍照)/,
+    /([^，。？?！!、\s\n]{1,16})(?:哪里好拍照|哪儿好拍|怎么拍|好拍吗|有什么好吃的|有啥好吃的|人好多|好多人)/
+  ];
+
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    const place = cleanPlaceCandidate(match?.[1] || "");
+    if (/^(我现在|我这边|我这里|当前位置)$/.test(place)) {
+      continue;
+    }
+    if (place) {
+      return place;
+    }
+  }
+
+  return extractExplicitPlace(text);
+}
+
 function extractRouteIntent(userText = "", conversationState = {}) {
   const text = String(userText || "").trim();
   const state = sanitizeConversationState(conversationState);
@@ -347,7 +381,7 @@ function detectEmotion(userText = "", context = {}) {
 }
 
 function extractRecentPlaceFromHistory(history = [], userText = "") {
-  const currentPlace = extractExplicitPlace(userText);
+  const currentPlace = extractExplicitPlaceSmart(userText);
   if (currentPlace) {
     return currentPlace;
   }
@@ -356,7 +390,7 @@ function extractRecentPlaceFromHistory(history = [], userText = "") {
   for (const message of recentHistory) {
     const text = getMessageText(message);
     const routeInfo = extractRouteIntent(text);
-    const place = routeInfo.target_place || extractExplicitPlace(text);
+    const place = routeInfo.target_place || extractExplicitPlaceSmart(text);
     if (place) {
       return place;
     }
@@ -369,7 +403,7 @@ function getCurrentContextPlace(conversationState = {}, liveContext = {}) {
   return cleanPlaceCandidate(
     liveContext.place_name ||
       conversationState.current_place ||
-      ((liveContext.source === "browser" && liveContext.latitude != null) ? "当前位置" : "") ||
+      liveContext.city ||
       conversationState.live_context?.place_name ||
       ""
   );
@@ -391,7 +425,7 @@ function shouldPreferCurrentLocation({ detectedIntent = "", userText = "" } = {}
 function extractQuestionTarget(userText = "", conversationState = {}, liveContext = {}, detectedIntent = "") {
   const state = sanitizeConversationState(conversationState);
   const text = String(userText || "");
-  const explicitPlace = extractExplicitPlace(text);
+  const explicitPlace = extractExplicitPlaceSmart(text);
   const routeInfo = extractRouteIntent(text, state);
   const currentContextPlace = getCurrentContextPlace(state, liveContext);
   const travelTopicPlace = getTravelTopicPlace(state, liveContext);
@@ -474,8 +508,7 @@ function buildLiveContext({ payload = {}, conversationState = {}, location = {},
     payloadLiveContext.source ||
     stateLiveContext.location_source ||
     stateLiveContext.source ||
-    (payloadLiveContext.latitude !== undefined || stateLiveContext.latitude !== undefined ? "browser" : "") ||
-    (conversationState.current_place ? "manual" : "mock");
+    (conversationState.current_place || conversationState.current_city ? "user_declared" : "none");
   const latitude = normalizeNumber(payloadLiveContext.latitude, normalizeNumber(stateLiveContext.latitude));
   const longitude = normalizeNumber(payloadLiveContext.longitude, normalizeNumber(stateLiveContext.longitude));
   const weather = resolveWeatherContext({
@@ -521,7 +554,7 @@ function resolveConversationContext(payload = {}) {
     location,
     nearbyPlaces: rawNearbyPlaces
   });
-  const explicitPlace = extractExplicitPlace(userText);
+  const explicitPlace = extractExplicitPlaceSmart(userText);
   const routeInfo = extractRouteIntent(userText, conversationState);
   const detectedIntent = detectIntent({
     userText,
@@ -822,17 +855,125 @@ function shouldForceFallback(response, context = {}) {
   return false;
 }
 
+async function attachWeatherToContext(contextSummary = {}, conversationState = {}) {
+  const liveContext = contextSummary.live_context || {};
+  const weatherInfo = await enrichWeatherContext({
+    liveContext,
+    currentPlace: contextSummary.current_place || conversationState.current_place || "",
+    currentCity: conversationState.current_city || liveContext.city || "",
+    targetPlace: contextSummary.target_place || contextSummary.effective_place || ""
+  });
+
+  return {
+    ...contextSummary,
+    live_context: {
+      ...liveContext,
+      weather: {
+        condition: weatherInfo.condition || "",
+        temperature_c: weatherInfo.temperature_c,
+        rain_probability: weatherInfo.rain_probability,
+        uv_index: weatherInfo.uv_index,
+        source: weatherInfo.source || "mock"
+      },
+      city: liveContext.city || weatherInfo.city || "",
+      place_name: liveContext.place_name || weatherInfo.place_name || ""
+    }
+  };
+}
+
+function buildProactiveFallback({ persona, contextSummary = {}, conversationState = {}, history = [] } = {}) {
+  const liveContext = contextSummary.live_context || {};
+  const weather = liveContext.weather || {};
+  const timeOfDay = liveContext.time_of_day || inferTimeOfDay(liveContext.local_time || "");
+  const targetPlace = contextSummary.target_place || contextSummary.effective_place || conversationState.target_place || "";
+  const currentPlace = contextSummary.current_place || conversationState.current_place || "";
+  const focusPlace = targetPlace || currentPlace;
+  const hasPlan = Boolean(conversationState.last_intent || conversationState.pending_question);
+  const historySize = Array.isArray(history) ? history.length : 0;
+
+  if (weather.rain_probability != null && Number(weather.rain_probability) >= 50) {
+    return {
+      should_send: true,
+      message: weather.source === "open_meteo"
+        ? "按当前天气信息看，等会儿可能会有雨。出门前把伞带上吧，我陪你慢慢走。"
+        : "按当前 Demo 天气信息看，等会儿可能会有雨。出门前把伞带上，会更安心一点。",
+      reason: "rain_reminder",
+      cooldown_seconds: 180
+    };
+  }
+
+  if (timeOfDay === "night") {
+    return {
+      should_send: true,
+      message: focusPlace
+        ? `已经有点晚了。我们如果还要往${focusPlace}那边走，尽量挑亮一点、主路更清楚的方向。`
+        : "已经有点晚了。接下来尽量走亮一点的路，如果你要继续逛，我可以陪你把回程也一起想好。",
+      reason: "night_safety",
+      cooldown_seconds: 180
+    };
+  }
+
+  if ((timeOfDay === "noon" || timeOfDay === "evening") && historySize > 0) {
+    return {
+      should_send: true,
+      message: focusPlace
+        ? `走到这会儿，如果你在${focusPlace}附近还没想好下一步，我们可以顺手先把吃饭这件事定下来。`
+        : "走到这会儿，要不要先把吃饭这件事定下来？我可以按省力一点的思路陪你挑。",
+      reason: "meal_check_in",
+      cooldown_seconds: 180
+    };
+  }
+
+  if (focusPlace && !hasPlan) {
+    return {
+      should_send: true,
+      message: `${persona.opening_line || "我还记着你刚刚提到的地方。"} 你刚刚说到${focusPlace}，要不要这轮先定一个方向：路线、拍照还是吃的？`,
+      reason: "plan_follow_up",
+      cooldown_seconds: 180
+    };
+  }
+
+  return {
+    should_send: historySize > 0,
+    message: "我还在这儿。要是你想继续走下去，我们可以只先决定下一小步，不用一下子把整段路都想完。",
+    reason: "gentle_check_in",
+    cooldown_seconds: 180
+  };
+}
+
+async function generateProactiveCare(payload = {}) {
+  const safePayload = payload && typeof payload === "object" ? payload : {};
+  const persona = pickPersona(safePayload.persona_id);
+  const conversationState = sanitizeConversationState(safePayload.conversation_state);
+  const contextSummary = await attachWeatherToContext(
+    resolveConversationContext({
+      ...safePayload,
+      conversation_state: conversationState,
+      location: normalizeLocation(safePayload.location)
+    }),
+    conversationState
+  );
+
+  return buildProactiveFallback({
+    persona,
+    contextSummary,
+    conversationState,
+    history: Array.isArray(safePayload.history) ? safePayload.history : []
+  });
+}
+
 async function generateChatResponse(payload = {}) {
   const safePayload = payload && typeof payload === "object" ? payload : {};
   const persona = pickPersona(safePayload.persona_id);
   const location = normalizeLocation(safePayload.location);
   const context = safePayload.context && typeof safePayload.context === "object" ? safePayload.context : {};
   const conversationState = sanitizeConversationState(safePayload.conversation_state);
-  const contextSummary = resolveConversationContext({
+  const baseContextSummary = resolveConversationContext({
     ...safePayload,
     location,
     conversation_state: conversationState
   });
+  const contextSummary = await attachWeatherToContext(baseContextSummary, conversationState);
   const detectedIntent = contextSummary.detected_intent;
   const emotion = detectEmotion(safePayload.user_text, {
     ...context,
@@ -929,5 +1070,6 @@ module.exports = {
   resolveConversationContext,
   detectIntent,
   generateChatResponse,
+  generateProactiveCare,
   generateDiary
 };
