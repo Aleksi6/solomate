@@ -141,6 +141,53 @@ const mockPhotoResponse = {
   reply_text: '我看到你眼前的旅行场景了，这张照片可以作为任务和日记素材。',
 }
 
+const buildMockPhotoResponse = (payload = {}) => {
+  const taskId = payload.task_id || 'firework_photo_task'
+  const rewardMap = {
+    firework_photo_task: '城市烟火徽章',
+    local_food_task: '本地味道徽章',
+    safe_route_task: '安心探索徽章',
+  }
+
+  if (taskId === 'local_food_task') {
+    return {
+      scene_summary: '这张照片更像一份在地味道的记录，适合留作今天吃到什么的小小凭证。',
+      safety_observation: '按当前 Demo mock 判断，拍食物时尽量靠近明亮区域，也别把随身物品离手太远。',
+      photo_advice: '靠近食物主体一点，再留一点桌面或店招，会更有“我真的在这里吃过”的感觉。',
+      task_result: {
+        passed: true,
+        reward_badge: rewardMap[taskId],
+        reason: '当前为 Demo mock 判定，未启用真实视觉模型时会先按任务类型给出保守结果。',
+      },
+      reply_text: '我先把这张照片当作今天的一枚记忆碎片收下来了。即使现在走的是 Demo mock 识别，这条观察也还能继续留在碎片册里。',
+    }
+  }
+
+  if (taskId === 'safe_route_task') {
+    return {
+      scene_summary: '这张照片更像一段路线观察记录，可以拿来判断这条路是不是适合一个人继续往前走。',
+      safety_observation: '按当前 Demo mock 判断，亮灯、主路和稳定人流会是更安心的路线线索。',
+      photo_advice: '如果想让路线感更清楚，可以把前方道路、路口灯光和周边店面一起拍进来。',
+      task_result: {
+        passed: true,
+        reward_badge: rewardMap[taskId],
+        reason: '当前为 Demo mock 判定，未启用真实视觉模型时会先按任务类型给出保守结果。',
+      },
+      reply_text: '我先把这张照片当作今天的一枚记忆碎片收下来了。即使现在走的是 Demo mock 识别，这条观察也还能继续留在碎片册里。',
+    }
+  }
+
+  return {
+    ...mockPhotoResponse,
+    task_result: {
+      ...mockPhotoResponse.task_result,
+      reward_badge: rewardMap[taskId] || rewardMap.firework_photo_task,
+      reason: '当前为 Demo mock 判定，未启用真实视觉模型时会先按任务类型给出保守结果。',
+    },
+    reply_text: '我先把这张照片当作今天的一枚记忆碎片收下来了。即使现在走的是 Demo mock 识别，这条观察也还能继续留在碎片册里。',
+  }
+}
+
 const mockDiaryResponse = {
   diary: '今天你一个人走过了老街入口和夜市街区。起初有一点犹豫，但你还是慢慢做出了下一步选择，也把这趟旅程认真记录了下来。',
   share_caption: '一个人的旅行，也会遇到刚刚好的热闹。',
@@ -176,6 +223,13 @@ const mockVoiceStatus = {
   browser_asr_recommended: true,
   backend_asr_enabled: false,
   tts_recommended: 'browser_speech_synthesis',
+}
+
+const mockLiveContextStatus = {
+  geolocation_recommended: true,
+  weather_enable: false,
+  weather_has_api_key: false,
+  fallback: 'mock live_context',
 }
 
 const withJsonHeaders = (options = {}) => ({
@@ -280,23 +334,32 @@ const detectIntent = (userText = '', explicitPlace = '', routeInfo = {}) => {
   return 'chat'
 }
 
+const prefersCurrentPlaceForIntent = (intent = '', userText = '') =>
+  ['food', 'weather', 'location_status'].includes(intent) || /附近|周边|这边|这里/.test(String(userText || ''))
+
 const buildMockChatResponse = (payload = {}) => {
   const userText = String(payload.user_text || '').trim()
   const conversationState = payload.conversation_state || {}
+  const liveContext = conversationState.live_context || payload.live_context || {}
   const routeInfo = extractRouteIntent(userText, conversationState)
   const explicitPlace = extractExplicitPlace(userText)
+  const intent = detectIntent(userText, explicitPlace, routeInfo)
+  const currentPlace = cleanPlaceCandidate(
+    liveContext.place_name ||
+      conversationState.current_place ||
+      payload.location?.place_name ||
+      (liveContext.source === 'browser' && liveContext.latitude != null ? '当前位置' : ''),
+  )
+  const currentCity = conversationState.current_city || liveContext.city || payload.location?.city || ''
+  const targetPlace = cleanPlaceCandidate(conversationState.target_place || conversationState.last_place || '')
   const effectivePlace =
     routeInfo.target_place ||
     explicitPlace ||
-    conversationState.target_place ||
-    conversationState.current_place ||
-    conversationState.last_place ||
-    conversationState.live_context?.place_name ||
+    (prefersCurrentPlaceForIntent(intent, userText) ? currentPlace || targetPlace : targetPlace || currentPlace) ||
     ''
-  const intent = detectIntent(userText, explicitPlace, routeInfo)
-  const weather = conversationState.live_context?.weather || payload.live_context?.weather || {}
-  const timeOfDay = conversationState.live_context?.time_of_day || payload.live_context?.time_of_day || ''
-  const locationSource = conversationState.live_context?.source || payload.live_context?.source || 'unavailable'
+  const weather = liveContext.weather || {}
+  const timeOfDay = liveContext.time_of_day || ''
+  const locationSource = liveContext.source || 'unavailable'
 
   if (intent === 'identity') {
     return {
@@ -311,8 +374,6 @@ const buildMockChatResponse = (payload = {}) => {
   }
 
   if (intent === 'location_status') {
-    const currentPlace = conversationState.current_place || conversationState.live_context?.place_name || payload.live_context?.place_name || ''
-    const currentCity = conversationState.current_city || conversationState.live_context?.city || payload.live_context?.city || ''
     const locationLine =
       locationSource === 'browser'
         ? `我当前拿到的实时位置是${currentCity || ''}${currentPlace || ''}。`
@@ -362,6 +423,7 @@ const buildMockChatResponse = (payload = {}) => {
   if (intent === 'weather') {
     const rainProbability = Number(weather.rain_probability)
     const uvIndex = Number(weather.uv_index)
+    const placeLabel = currentPlace ? `${currentPlace}这边` : '你这边'
     const weatherLine =
       rainProbability >= 60
         ? '这会儿雨概率偏高，出门记得带伞。'
@@ -369,10 +431,14 @@ const buildMockChatResponse = (payload = {}) => {
           ? '紫外线不低，出门记得防晒和补水。'
           : timeOfDay === 'night'
             ? '如果现在出门，优先走主路，别拐太偏。'
-            : '我先按当前模拟天气提醒你，出门可以走轻便一点。'
+            : '按现在的情况，穿轻便一点、方便随时加减衣服会更舒服。'
+    const weatherSourceNote =
+      weather.source === 'mock'
+        ? `${placeLabel}我先按模拟天气提醒你。`
+        : `${placeLabel}我按当前天气信息先提醒你。`
 
     return {
-      reply_text: `我先按当前模拟天气提醒你。${weatherLine}`,
+      reply_text: `${weatherSourceNote}${weatherLine}`,
       reply_type: 'weather_advice',
       emotion_detected: 'uncertain',
       suggested_action: 'check_weather_and_prepare',
@@ -383,8 +449,10 @@ const buildMockChatResponse = (payload = {}) => {
   }
 
   if (intent === 'food' && effectivePlace) {
+    const placeLabel = currentPlace && prefersCurrentPlaceForIntent(intent, userText) ? currentPlace : effectivePlace
+
     return {
-      reply_text: `${effectivePlace}附近可以优先找人多、评价稳定、翻台快的小吃或餐馆。你想吃正餐还是小吃？我可以按省力路线帮你挑。`,
+      reply_text: `${placeLabel}附近可以先找人多、评价稳定、翻台快的小吃或餐馆。要是你刚到这边，优先选街边开阔、进出方便的店，一个人吃也会更放松。你想吃正餐还是小吃？我可以按省力路线帮你挑。`,
       reply_type: 'food_advice',
       emotion_detected: 'uncertain',
       suggested_action: 'find_food_nearby',
@@ -487,6 +555,7 @@ export const getMockPlaces = async () => safeFetch('/api/mock-places', { method:
 export const getLlmStatus = async () => safeFetch('/api/llm-status', { method: 'GET' }, mockLlmStatus)
 export const getVisionStatus = async () => safeFetch('/api/vision-status', { method: 'GET' }, mockVisionStatus)
 export const getVoiceStatus = async () => safeFetch('/api/voice-status', { method: 'GET' }, mockVoiceStatus)
+export const getLiveContextStatus = async () => safeFetch('/api/live-context-status', { method: 'GET' }, mockLiveContextStatus)
 
 export const sendChatMessage = async (payload) =>
   safeFetch(
@@ -498,15 +567,33 @@ export const sendChatMessage = async (payload) =>
     () => buildMockChatResponse(payload),
   )
 
-export const analyzePhoto = async (payload) =>
-  safeFetch(
+export const analyzePhoto = async (payload = {}) => {
+  if (payload.file) {
+    const formData = new FormData()
+    formData.append('image', payload.file)
+    formData.append('task_id', payload.task_id || 'firework_photo_task')
+    formData.append('persona_id', payload.persona_id || 'photo_buddy')
+    formData.append('user_question', payload.user_question || '')
+
+    return safeFetch(
+      '/api/analyze-photo',
+      {
+        method: 'POST',
+        body: formData,
+      },
+      () => buildMockPhotoResponse(payload),
+    )
+  }
+
+  return safeFetch(
     '/api/analyze-photo',
     withJsonHeaders({
       method: 'POST',
       body: JSON.stringify(payload),
     }),
-    mockPhotoResponse,
+    () => buildMockPhotoResponse(payload),
   )
+}
 
 export const completeTask = async (payload) =>
   safeFetch(

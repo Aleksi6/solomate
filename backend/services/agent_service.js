@@ -43,6 +43,7 @@ const DEFAULT_CONVERSATION_STATE = {
   live_context: {
     local_time: "",
     time_of_day: "",
+    location_source: "none",
     source: "unavailable",
     latitude: null,
     longitude: null,
@@ -113,7 +114,8 @@ function sanitizeConversationState(state = {}) {
     live_context: {
       ...DEFAULT_CONVERSATION_STATE.live_context,
       ...liveContext,
-      source: liveContext.source || "unavailable",
+      location_source: liveContext.location_source || liveContext.source || "none",
+      source: liveContext.location_source || liveContext.source || "none",
       latitude: normalizeNumber(liveContext.latitude),
       longitude: normalizeNumber(liveContext.longitude),
       nearby_places: Array.isArray(liveContext.nearby_places) ? liveContext.nearby_places.filter(Boolean) : [],
@@ -363,22 +365,49 @@ function extractRecentPlaceFromHistory(history = [], userText = "") {
   return "";
 }
 
-function extractQuestionTarget(userText = "", conversationState = {}) {
+function getCurrentContextPlace(conversationState = {}, liveContext = {}) {
+  return cleanPlaceCandidate(
+    liveContext.place_name ||
+      conversationState.current_place ||
+      ((liveContext.source === "browser" && liveContext.latitude != null) ? "当前位置" : "") ||
+      conversationState.live_context?.place_name ||
+      ""
+  );
+}
+
+function getTravelTopicPlace(conversationState = {}, liveContext = {}) {
+  return cleanPlaceCandidate(
+    conversationState.target_place ||
+      conversationState.last_place ||
+      getCurrentContextPlace(conversationState, liveContext) ||
+      ""
+  );
+}
+
+function shouldPreferCurrentLocation({ detectedIntent = "", userText = "" } = {}) {
+  return ["food", "weather", "location_status"].includes(detectedIntent) || /附近|周边|这边|这里/.test(String(userText || ""));
+}
+
+function extractQuestionTarget(userText = "", conversationState = {}, liveContext = {}, detectedIntent = "") {
   const state = sanitizeConversationState(conversationState);
   const text = String(userText || "");
   const explicitPlace = extractExplicitPlace(text);
   const routeInfo = extractRouteIntent(text, state);
+  const currentContextPlace = getCurrentContextPlace(state, liveContext);
+  const travelTopicPlace = getTravelTopicPlace(state, liveContext);
 
   if (explicitPlace || routeInfo.target_place) {
     return explicitPlace || routeInfo.target_place;
   }
 
   if (/哪里好拍照|哪儿好拍|怎么拍|好拍吗|有啥好吃的|有什么好吃的|吃什么|人好多怎么办|怎么走|附近有什么|怎么去|怎么从这里去/.test(text)) {
-    return cleanPlaceCandidate(state.target_place || state.current_place || state.last_place || state.live_context.place_name || "");
+    return shouldPreferCurrentLocation({ detectedIntent, userText: text })
+      ? cleanPlaceCandidate(currentContextPlace || travelTopicPlace)
+      : cleanPlaceCandidate(travelTopicPlace || currentContextPlace);
   }
 
   if (/有什么故事|有什么来历|为什么有名|历史|典故/.test(text)) {
-    return cleanPlaceCandidate(state.target_place || state.current_place || state.last_place || state.live_context.place_name || "");
+    return cleanPlaceCandidate(travelTopicPlace || currentContextPlace);
   }
 
   return "";
@@ -441,10 +470,12 @@ function buildLiveContext({ payload = {}, conversationState = {}, location = {},
     conversationState.current_place ||
     "";
   const source =
+    payloadLiveContext.location_source ||
     payloadLiveContext.source ||
+    stateLiveContext.location_source ||
     stateLiveContext.source ||
     (payloadLiveContext.latitude !== undefined || stateLiveContext.latitude !== undefined ? "browser" : "") ||
-    (conversationState.current_place ? "user_text" : "unavailable");
+    (conversationState.current_place ? "manual" : "mock");
   const latitude = normalizeNumber(payloadLiveContext.latitude, normalizeNumber(stateLiveContext.latitude));
   const longitude = normalizeNumber(payloadLiveContext.longitude, normalizeNumber(stateLiveContext.longitude));
   const weather = resolveWeatherContext({
@@ -467,6 +498,7 @@ function buildLiveContext({ payload = {}, conversationState = {}, location = {},
   return {
     local_time: localTime,
     time_of_day: timeOfDay,
+    location_source: source,
     source,
     latitude,
     longitude,
@@ -499,10 +531,10 @@ function resolveConversationContext(payload = {}) {
     conversationState
   });
   const recentPlace = extractRecentPlaceFromHistory(history, userText);
-  const currentPlace = cleanPlaceCandidate(conversationState.current_place || liveContext.place_name || "");
+  const currentPlace = getCurrentContextPlace(conversationState, liveContext);
   const targetPlace = cleanPlaceCandidate(conversationState.target_place || "");
   const lastPlace = cleanPlaceCandidate(conversationState.last_place || "");
-  const questionTarget = extractQuestionTarget(userText, conversationState);
+  const questionTarget = extractQuestionTarget(userText, conversationState, liveContext, detectedIntent);
   const locationPlace = cleanPlaceCandidate(location.place_name || liveContext.place_name || "");
   const mockPlace = liveContext.nearby_places[0]?.name || DEFAULT_PLACE.name;
 
@@ -516,7 +548,9 @@ function resolveConversationContext(payload = {}) {
     effectivePlace = questionTarget;
     placeSource = "conversation_state";
   } else if (targetPlace || currentPlace || lastPlace) {
-    effectivePlace = targetPlace || currentPlace || lastPlace;
+    effectivePlace = shouldPreferCurrentLocation({ detectedIntent, userText })
+      ? currentPlace || targetPlace || lastPlace
+      : targetPlace || currentPlace || lastPlace;
     placeSource = "conversation_state";
   } else if (recentPlace) {
     effectivePlace = recentPlace;

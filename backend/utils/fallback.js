@@ -47,6 +47,10 @@ function pickTopicPlace({ targetPlace = "", effectivePlace = "", currentPlace = 
   return targetPlace || effectivePlace || currentPlace || fallbackPlace || "";
 }
 
+function shouldPreferCurrentPlace(intent = "", userText = "") {
+  return ["food", "weather", "location_status"].includes(intent) || /附近|周边|这边|这里/.test(String(userText || ""));
+}
+
 function formatLocalTime(localTime = "") {
   const date = localTime ? new Date(localTime) : new Date();
   if (Number.isNaN(date.getTime())) {
@@ -114,17 +118,33 @@ function fallbackChatResponse(input = {}) {
   const conversationState = input.conversationState && typeof input.conversationState === "object" ? input.conversationState : {};
   const liveContext = input.liveContext && typeof input.liveContext === "object" ? input.liveContext : {};
   const location = input.location && typeof input.location === "object" ? input.location : DEFAULT_LOCATION;
-  const topicPlace = pickTopicPlace({
+  const actualPlace =
+    liveContext.place_name ||
+    conversationState.current_place ||
+    ((liveContext.source === "browser" && liveContext.latitude != null) ? "当前位置" : "") ||
+    location.place_name ||
+    "";
+  const travelTopicPlace = pickTopicPlace({
     targetPlace,
     effectivePlace,
     currentPlace: conversationState.current_place || "",
     fallbackPlace: location.place_name || DEFAULT_LOCATION.place_name
   });
-  const actualPlace = liveContext.place_name || conversationState.current_place || location.place_name || "";
+  const currentTopicPlace = pickTopicPlace({
+    targetPlace: actualPlace,
+    effectivePlace: conversationState.current_place || "",
+    currentPlace: "",
+    fallbackPlace: ""
+  });
+  const topicPlace = shouldPreferCurrentPlace(intent, userText)
+    ? currentTopicPlace || travelTopicPlace
+    : travelTopicPlace || currentTopicPlace;
   const actualCity = liveContext.city || conversationState.current_city || location.city || "";
   const weather = normalizeWeather(liveContext.weather);
   const weatherReminder = buildWeatherReminder(weather, liveContext.time_of_day || "");
-  const weatherSourceNote = weather.source === "mock" ? "我先按当前模拟天气提醒你。" : "我按当前天气信息先提醒你。";
+  const weatherSourceNote = weather.source === "mock"
+    ? `${actualPlace ? `${actualPlace}这边` : "你这边"}我先按模拟天气提醒你。`
+    : `${actualPlace ? `${actualPlace}这边` : "你这边"}我按当前天气信息先提醒你。`;
 
   if (intent === "identity") {
     return normalizeChatResponse({
@@ -226,7 +246,7 @@ function fallbackChatResponse(input = {}) {
   if (intent === "food" && topicPlace) {
     const nightHint = liveContext.time_of_day === "night" ? "夜里就别为了吃的走太偏。" : "";
     return normalizeChatResponse({
-      reply_text: `${topicPlace}附近可以优先找人多、评价稳定、翻台快的小吃或餐馆。你想吃正餐还是小吃？我可以按省力路线帮你挑。`,
+      reply_text: `${topicPlace}附近可以优先找人多、评价稳定、翻台快的小吃或餐馆。要是你刚到这边，先选街边开阔、进出方便的店，一个人吃也会更放松。你想吃正餐还是小吃？我可以按省力路线帮你挑。`,
       reply_type: "food_advice",
       emotion_detected: input.emotion_detected || "uncertain",
       suggested_action: "find_food_nearby",
@@ -415,6 +435,39 @@ function fallbackForPath(path = "") {
     service: "SoloMate mock backend",
     mode: "mock-fallback"
   };
+}
+
+function normalizePhotoAnalysisResponse(partial = {}) {
+  const input = partial && typeof partial === "object" ? partial : {};
+  const taskResult = input.task_result && typeof input.task_result === "object" ? input.task_result : {};
+
+  return {
+    scene_summary: input.scene_summary || "这张照片里有旅行现场感，适合收进今天的记录里。",
+    safety_observation: input.safety_observation || "按当前画面判断，先优先停留在更明亮、开阔、容易求助的位置会更安心。",
+    photo_advice: input.photo_advice || "可以把主体、环境线索和一点点现场氛围一起放进画面里，照片会更完整。",
+    task_result: {
+      passed: typeof taskResult.passed === "boolean" ? taskResult.passed : true,
+      reward_badge: taskResult.reward_badge || "",
+      reason: taskResult.reason || "当前为 Demo mock 判定。"
+    },
+    reply_text: input.reply_text || "我先把这张照片替你收下来了，它已经可以作为今天的一枚记忆碎片。"
+  };
+}
+
+function fallbackPhotoAnalysis(task = {}) {
+  const rewardBadge = task.reward_badge || "";
+  const taskTitle = task.title || "旅行照片记录";
+
+  return normalizePhotoAnalysisResponse({
+    task_result: {
+      passed: true,
+      reward_badge: rewardBadge,
+      reason: `当前为 Demo mock 判定，先按「${taskTitle}」给出保守结果。`
+    },
+    reply_text: rewardBadge
+      ? `我先把这张照片收进今天的碎片册里了。当前还没启用真实视觉模型，所以任务结果先按 Demo mock 来判断，这次对应的是「${rewardBadge}」。`
+      : "我先把这张照片收进今天的碎片册里了。当前还没启用真实视觉模型，所以这次先按 Demo mock 给你保守判断。"
+  });
 }
 
 module.exports = {

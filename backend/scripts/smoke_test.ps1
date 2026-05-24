@@ -128,6 +128,7 @@ $bund = U @(0x5916, 0x6EE9)
 $chongqing = U @(0x91CD, 0x5E86)
 $nightMarket = U @(0x591C, 0x5E02)
 $cityFireworkBadge = U @(0x57CE, 0x5E02, 0x70DF, 0x706B, 0x5FBD, 0x7AE0)
+$peopleSquare = U @(0x4EBA, 0x6C11, 0x5E7F, 0x573A)
 
 $wherePhoto = U @(0x54EA, 0x91CC, 0x597D, 0x62CD, 0x7167)
 $manyPeopleAtPark = U @(0x6211, 0x60F3, 0x53BB, 0x661F, 0x6CB3, 0x516C, 0x56ED, 0xFF0C, 0x611F, 0x89C9, 0x4EBA, 0x597D, 0x591A)
@@ -137,6 +138,7 @@ $wantBundAgain = U @(0x6211, 0x53C8, 0x60F3, 0x53BB, 0x5916, 0x6EE9, 0x4E86)
 $fromChongqingGo = U @(0x600E, 0x4E48, 0x4ECE, 0x91CD, 0x5E86, 0x53BB, 0x5462)
 $wantNightMarket = U @(0x6211, 0x60F3, 0x53BB, 0x591C, 0x5E02)
 $goOut = U @(0x6211, 0x8981, 0x51FA, 0x95E8)
+$nearbyFood = U @(0x9644, 0x8FD1, 0x6709, 0x4EC0, 0x4E48, 0x597D, 0x5403, 0x7684)
 
 $westLakeNightMarket = U @(0x897F, 0x6E56, 0x591C, 0x5E02)
 $askWhereA = U @(0x4F60, 0x60F3, 0x53BB, 0x54EA)
@@ -163,6 +165,9 @@ try {
 
   $places = Invoke-JsonGet -Url "$baseUrl/api/mock-places"
   Assert-True -Name "mock-places" -Condition (@($places).Count -gt 0) -Message "mock places should not be empty"
+
+  $liveContextStatus = Invoke-JsonGet -Url "$baseUrl/api/live-context-status"
+  Assert-Fields -Name "live-context-status" -Object $liveContextStatus -Fields @("geolocation_recommended", "weather_enable", "weather_has_api_key", "fallback")
 
   $greeting = Invoke-JsonPost -Url "$baseUrl/api/chat" -Payload @{
     conversation_id = "smoke-greeting"
@@ -332,11 +337,64 @@ try {
   $weatherHelpful = $case5.reply_text.Contains($bringUmbrella) -or $case5.reply_text.Contains($rain) -or $case5.safety_tip.Contains($bringUmbrella)
   Assert-True -Name "chat-case-5" -Condition $weatherHelpful -Message "weather reply should mention umbrella or rain"
 
+  $case6 = Invoke-JsonPost -Url "$baseUrl/api/chat" -Payload @{
+    conversation_id = "smoke-case-6"
+    user_text = $nearbyFood
+    persona_id = "gentle_friend"
+    mode = "chat"
+    conversation_state = @{
+      target_place = $bund
+      current_place = $peopleSquare
+      current_city = U @(0x4E0A, 0x6D77)
+      travel_mode = "solo"
+      live_context = @{
+        source = "browser"
+        city = U @(0x4E0A, 0x6D77)
+        place_name = $peopleSquare
+      }
+    }
+    live_context = @{
+      source = "browser"
+      city = U @(0x4E0A, 0x6D77)
+      place_name = $peopleSquare
+    }
+  }
+  Assert-Fields -Name "chat-case-6" -Object $case6 -Fields @("reply_text", "reply_type", "emotion_detected", "suggested_action", "safety_tip", "next_options", "task_triggered")
+  Assert-True -Name "chat-case-6" -Condition ($case6.reply_text.Contains($peopleSquare)) -Message "nearby food reply should use current place"
+  Assert-True -Name "chat-case-6" -Condition (-not $case6.reply_text.Contains($bund)) -Message "nearby food reply should not fall back to old target place"
+
+  $case7 = Invoke-JsonPost -Url "$baseUrl/api/chat" -Payload @{
+    conversation_id = "smoke-case-7"
+    user_text = $nearbyFood
+    persona_id = "gentle_friend"
+    mode = "chat"
+    conversation_state = @{
+      target_place = $bund
+      current_city = U @(0x4E0A, 0x6D77)
+      travel_mode = "solo"
+      live_context = @{
+        source = "browser"
+        city = U @(0x4E0A, 0x6D77)
+        latitude = 31.2304
+        longitude = 121.4737
+      }
+    }
+    live_context = @{
+      source = "browser"
+      city = U @(0x4E0A, 0x6D77)
+      latitude = 31.2304
+      longitude = 121.4737
+    }
+  }
+  Assert-Fields -Name "chat-case-7" -Object $case7 -Fields @("reply_text", "reply_type", "emotion_detected", "suggested_action", "safety_tip", "next_options", "task_triggered")
+  Assert-True -Name "chat-case-7" -Condition (-not $case7.reply_text.Contains($bund)) -Message "nearby food reply should not fall back to old target place when only coordinates are available"
+
   $photo = Invoke-JsonPost -Url "$baseUrl/api/analyze-photo" -Payload @{
     task_id = "firework_photo_task"
     persona_id = "gentle_friend"
   }
   Assert-Fields -Name "photo" -Object $photo -Fields @("scene_summary", "safety_observation", "photo_advice", "task_result", "reply_text")
+  Assert-Fields -Name "photo-task-result" -Object $photo.task_result -Fields @("passed", "reward_badge", "reason")
 
   $task = Invoke-JsonPost -Url "$baseUrl/api/complete-task" -Payload @{
     task_id = "firework_photo_task"

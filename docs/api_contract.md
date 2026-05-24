@@ -1,22 +1,44 @@
 # SoloMate API Contract
 
 SoloMate 当前保持这些边界不变：
-- 不修改既有 `/api/chat` 返回字段名
+- 不修改既有 `/api/chat`、`/api/analyze-photo`、`/api/complete-task`、`/api/generate-diary` 的返回字段名
 - 所有核心接口都保留 mock / fallback
 - P0 不新增数据库
-- 当前 Demo 会话主要保存在前端 `localStorage`
+- P0 会话记忆主要保存在前端 `localStorage`
 
 基础地址：
-
 ```text
 http://localhost:3001
 ```
 
 前端环境变量：
-
 ```text
 VITE_API_BASE_URL=http://localhost:3001
 ```
+
+## P0 会话与本地存储
+
+前端使用这些 key：
+- `solomate_conversation_id`
+- `solomate_session_date`
+- `solomate_chat_messages`
+- `solomate_conversation_state`
+- `solomate_memory_fragments`
+- `solomate_badges`
+- `solomate_completed_tasks`
+- `solomate_diary`
+
+会话生命周期：
+- App 启动时检查 `solomate_session_date`
+- 如果不是今天，则创建新的当日会话
+- 新会话会刷新 `conversation_id`，并清空 `chat_messages` / `conversation_state`
+- `memory_fragments` 和 `badges` 可保留，用于碎片册回看
+- “重置今日旅程 / 清空 Demo” 会清空以上全部 key
+
+为什么 P0 不用数据库：
+- Demo 阶段以 `localStorage` 足够支撑连续聊天、碎片册、徽章和日记
+- 数据结构已经按 `conversation_id / history / conversation_state / live_context` 组织
+- P1 可升级为 SQLite，保存 `conversation_id / messages / summary / fragments`
 
 ## GET /api/health
 
@@ -25,6 +47,19 @@ VITE_API_BASE_URL=http://localhost:3001
   "status": "ok",
   "service": "SoloMate mock backend",
   "mode": "mock-fallback"
+}
+```
+
+## GET /api/live-context-status
+
+用于前端判断当前 Demo 的实时能力状态。
+
+```json
+{
+  "geolocation_recommended": true,
+  "weather_enable": false,
+  "weather_has_api_key": false,
+  "fallback": "mock live_context"
 }
 ```
 
@@ -39,32 +74,30 @@ VITE_API_BASE_URL=http://localhost:3001
 
 | 字段 | 类型 | 必填 | 说明 |
 |---|---|---:|---|
-| `conversation_id` | string | 否 | 前端使用 `solomate_conversation_id` 持久化当前会话 |
+| `conversation_id` | string | 是 | 前端持久化的当前会话 id |
 | `user_text` | string | 是 | 当前用户输入 |
 | `persona_id` | string | 否 | 默认 `gentle_friend` |
 | `mode` | string | 否 | 一般传 `chat` |
-| `location` | object | 否 | App 传入的位置；没有时允许后端使用 mock fallback |
-| `context` | object | 否 | 轻量上下文，如 `mood`、`travel_mode`、`local_time`、`time_of_day` |
-| `nearby_places` | array | 否 | 附近地点列表；没有时后端读取 `config/mock_places.json` |
-| `history` | array | 否 | 最近 12 条聊天记录，必须包含 user 和 assistant 消息 |
-| `conversation_state` | object | 否 | 前端持久化的轻量会话状态 |
-| `live_context` | object | 否 | 当前发送时的实时上下文快照 |
+| `location` | object | 否 | App 传入位置；没有时后端用 mock fallback |
+| `context` | object | 否 | 轻量上下文，如 `mood`、`travel_mode` |
+| `nearby_places` | array | 否 | 附近地点列表；为空时后端读取 `config/mock_places.json` |
+| `history` | array | 否 | 最近 12 条消息，必须包含 user + assistant |
+| `conversation_state` | object | 否 | 前端持久化会话状态 |
+| `live_context` | object | 否 | 发送当下的实时上下文快照 |
 
 ### history 格式
-
-前端每次请求只传最近 12 条：
 
 ```json
 [
   {
     "role": "user",
-    "text": "我想去迪士尼",
+    "text": "我又想去外滩了",
     "timestamp": "2026-05-24T12:00:00.000Z",
     "persona_id": "gentle_friend"
   },
   {
     "role": "assistant",
-    "text": "好，那我们这轮先围绕迪士尼继续。",
+    "text": "好，那我们先把目标切到外滩。",
     "timestamp": "2026-05-24T12:00:05.000Z",
     "persona_id": "gentle_friend"
   }
@@ -101,38 +134,33 @@ VITE_API_BASE_URL=http://localhost:3001
     "longitude": null,
     "city": "",
     "place_name": "",
+    "location_source": "browser|mock|manual|none",
     "weather": {
       "condition": "",
       "temperature_c": null,
       "rain_probability": null,
       "uv_index": null,
-      "source": "mock"
+      "source": "mock|api|none"
     },
     "nearby_places": []
   }
 }
 ```
 
-### live_context 格式
+### 上下文解析优先级
 
-```json
-{
-  "local_time": "2026-05-24T19:30:00.000Z",
-  "time_of_day": "night",
-  "latitude": 30.25,
-  "longitude": 120.15,
-  "city": "杭州",
-  "place_name": "西湖附近",
-  "weather": {
-    "condition": "rain",
-    "temperature_c": 19,
-    "rain_probability": 80,
-    "uv_index": 0,
-    "source": "mock"
-  },
-  "nearby_places": []
-}
+后端按以下优先级确定 `effective_place`：
+
+```text
+user_text > conversation_state > history > location > mock
 ```
+
+规则：
+- 用户在当前轮提到新地点，立即切换上下文
+- 用户问“怎么从重庆去呢”时，会优先识别 `origin_place=重庆`
+- 用户问“附近有什么吃的 / 今天穿什么 / 我在哪”时，优先使用 `current_place / live_context`
+- `location` 只作兜底，不能污染用户明确说的新地点
+- 不会把默认 mock 位置拼成“西湖夜市”这类错误组合
 
 ### 返回字段
 
@@ -148,54 +176,18 @@ VITE_API_BASE_URL=http://localhost:3001
 }
 ```
 
-### 上下文机制
-
-- 前端使用 `localStorage` 保存：
-  - `solomate_conversation_id`
-  - `solomate_chat_messages`
-  - `solomate_conversation_state`
-- 每次 `/api/chat` 都会带最近 12 条 `history`
-- 文字输入、语音输入、快捷按钮、语音面板共用同一个 `sendMessage(userText, options = {})`
-- 后端按 `user_text > conversation_state > history > location > mock` 解析当前 `effective_place`
-- 后端会同时解析：
-  - `target_place`
-  - `origin_place`
-  - `current_place`
-  - `detected_intent`
-  - `user_goal`
-  - `live_context`
-- 当用户说了新地点时，会承认上下文切换
-- 当用户只追问“哪里好拍照 / 有啥好吃的 / 怎么从这里去”时，会默认承接当前主题地点
-- 默认 mock location 只作兜底，不会污染用户明确说的新地点
-
-### 为什么暂不加数据库
-
-- P0 Demo 阶段，`localStorage + history payload + conversation_state + live_context` 已足够支撑连续聊天体验
-- 这样可以保持黑客松版本轻量、稳定、方便快速复现
-- 数据库作为 P1 可扩展项
-- 后续可以用 SQLite 保存 `conversation_id / messages / summary`
-
-## 实时能力边界
-
-P0 已实现：
-- 时间：真实，由前端发送 `local_time` 和 `time_of_day`
-- 浏览器位置：可选获取，失败时 fallback 到 mock
-- 附近地点：使用 `config/mock_places.json`
-- 路线：提供文字思路，不做真实导航
-
-P1 可扩展：
-- 天气：支持 `WEATHER_ENABLE` 开关；当前默认 mock/fallback，后续可接真实天气服务
-- Places：后续可接 Places API 做更真实的附近地点排序
-- SQLite 会话存储
-
-P2 仅概念：
-- 打车建议可以作为文案思路存在，但不调用真实打车平台
-
-## GET /api/mock-places
-
-返回 mock 地点列表，前端地点卡片和聊天建议都可以复用。
-
 ## POST /api/analyze-photo
+
+用途：
+- 上传图片给搭子
+- 生成场景分析
+- 判断任务是否通过
+
+### 请求方式
+
+- 支持 `multipart/form-data`
+- 文件字段名：`image`
+- 其余字段：`task_id`、`persona_id`、`user_question`
 
 ### 返回字段
 
@@ -213,9 +205,12 @@ P2 仅概念：
 }
 ```
 
-## POST /api/complete-task
+说明：
+- DeepSeek 文本模型只用于 chat / diary，不作为真实视觉模型
+- 真正的图片识别走独立 `VISION_*` 适配器
+- 若 `VISION_ENABLE=false` 或视觉失败，接口仍返回标准字段，并明确为 Demo mock 判定
 
-### 返回字段
+## POST /api/complete-task
 
 ```json
 {
@@ -226,8 +221,6 @@ P2 仅概念：
 
 ## POST /api/generate-diary
 
-### 返回字段
-
 ```json
 {
   "diary": "",
@@ -236,22 +229,20 @@ P2 仅概念：
 }
 ```
 
-## Smoke Test
+## 实时能力边界
 
-```powershell
-cd backend
-npm.cmd run test:smoke
-```
+P0 已实现：
+- 时间：真实
+- 浏览器定位：可选，失败时 fallback
+- 天气：mock 或可选 API，失败时 fallback
+- 附近地点：`config/mock_places.json`
+- 路线：文字建议，不做真实导航
 
-当前 smoke test 覆盖：
-- health
-- chat greeting
-- location source explanation
-- follow-up photo question around current target place
-- switching target place
-- route follow-up from origin to target
-- default location contamination guard
-- weather mock reminder
-- analyze-photo fallback
-- complete-task
-- generate-diary
+P1：
+- SQLite 会话存储
+- 真实天气 API
+- 更细的地点服务
+
+P2：
+- 打车 / 导航平台接入
+

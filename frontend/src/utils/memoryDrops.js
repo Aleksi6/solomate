@@ -1,89 +1,39 @@
-import memoryFragmentConfig from '../../../config/memory_fragments.json'
+import { getMemoryFragments, saveMemoryFragment as persistMemoryFragment } from '../store/demoState'
+import memoryFragmentsConfig from '../../../config/memory_fragments.json'
 
-const MEMORY_FRAGMENT_KEY = 'memoryFragments'
 const MEMORY_DROP_STATE_KEY = 'memoryDropState'
 
-const formatCollectedAt = () =>
-  new Intl.DateTimeFormat('zh-CN', {
-    month: 'long',
-    day: 'numeric',
-    weekday: 'short',
-  }).format(new Date())
-
-export const readMemoryFragments = () => {
+const readJson = (key, fallbackValue) => {
   try {
-    const raw = localStorage.getItem(MEMORY_FRAGMENT_KEY)
-    const parsed = raw ? JSON.parse(raw) : []
-    return Array.isArray(parsed) ? parsed : []
+    const raw = localStorage.getItem(key)
+    return raw ? JSON.parse(raw) : fallbackValue
   } catch {
-    return []
+    return fallbackValue
   }
 }
 
-export const writeMemoryFragments = (fragments) => {
-  localStorage.setItem(MEMORY_FRAGMENT_KEY, JSON.stringify(fragments))
-  return fragments
+const writeJson = (key, value) => {
+  localStorage.setItem(key, JSON.stringify(value))
+  return value
 }
 
-const readDropState = () => {
-  try {
-    return JSON.parse(localStorage.getItem(MEMORY_DROP_STATE_KEY) || '{}')
-  } catch {
-    return {}
-  }
-}
+export const readMemoryFragments = () => getMemoryFragments()
 
-const writeDropState = (state) => {
-  localStorage.setItem(MEMORY_DROP_STATE_KEY, JSON.stringify(state))
-}
-
-const createStoredFragment = (fragment, source) => ({
-  ...fragment,
-  id: `${fragment.id}-${Date.now()}`,
-  source,
-  collectedAt: fragment.collectedAt || formatCollectedAt(),
-})
-
-const saveNewFragments = (newFragments) => {
-  if (newFragments.length === 0) return readMemoryFragments()
-  const existing = readMemoryFragments()
-  return writeMemoryFragments([...newFragments, ...existing])
-}
-
-const pickRandomDrop = () => {
-  const pool = memoryFragmentConfig.randomDrops || []
-  if (pool.length === 0) return null
-  return pool[Math.floor(Math.random() * pool.length)]
-}
-
-export const saveMemoryFragment = (fragment) => {
-  const storedFragment = createStoredFragment(fragment, 'souvenir_card')
-  saveNewFragments([storedFragment])
-  return storedFragment
-}
+export const saveMemoryFragment = (fragment) => persistMemoryFragment(fragment)
 
 export const triggerMemoryDrop = (trigger) => {
-  const state = readDropState()
-  let selectedDrop = null
-  const nextState = { ...state }
+  const dropState = readJson(MEMORY_DROP_STATE_KEY, { unlocked: [] })
+  const unlockedIds = new Set(Array.isArray(dropState.unlocked) ? dropState.unlocked : [])
+  const source = Array.isArray(memoryFragmentsConfig) ? memoryFragmentsConfig : []
 
-  if (trigger === 'environment_analysis' && !state.firstEnvironmentDrop) {
-    selectedDrop = memoryFragmentConfig.environmentFirstDrop
-    nextState.firstEnvironmentDrop = true
-  } else if (trigger === 'souvenir_saved' && !state.firstSouvenirDrop) {
-    selectedDrop = memoryFragmentConfig.souvenirFirstDrop
-    nextState.firstSouvenirDrop = true
-  } else if (Math.random() < 0.35) {
-    selectedDrop = pickRandomDrop()
+  const match = source.find((item) => item.trigger === trigger && !unlockedIds.has(item.id))
+  if (!match) return null
+
+  unlockedIds.add(match.id)
+  writeJson(MEMORY_DROP_STATE_KEY, { unlocked: Array.from(unlockedIds) })
+
+  return {
+    ...match,
+    created_at: new Date().toISOString(),
   }
-
-  if (!selectedDrop) {
-    writeDropState(nextState)
-    return null
-  }
-
-  const storedDrop = createStoredFragment(selectedDrop, trigger)
-  saveNewFragments([storedDrop])
-  writeDropState(nextState)
-  return storedDrop
 }

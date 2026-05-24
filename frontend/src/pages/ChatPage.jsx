@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Camera, MapPin, Send, Shield, Sparkles, Trophy } from 'lucide-react'
 import ChatBubble from '../components/ChatBubble'
@@ -59,6 +59,11 @@ const getTimeOfDay = (date = new Date()) => {
   if (hour >= 18 && hour < 22) return 'evening'
   return 'night'
 }
+
+const isLocationSensitivePrompt = (text = '') =>
+  /附近|周边|这边|这里|我的位置|我在哪|现在在哪|天气|下雨|带伞|防晒|穿什么|有啥好吃的|有什么好吃的|吃什么/.test(
+    String(text || ''),
+  )
 
 const buildHistoryPayload = (messages = []) =>
   messages.slice(-12).map((message) => ({
@@ -175,6 +180,7 @@ function ChatPage() {
   const [isSending, setIsSending] = useState(false)
   const [lastVoiceReply, setLastVoiceReply] = useState(null)
   const [replyMeta, setReplyMeta] = useState(null)
+  const transcriptRef = useRef(null)
 
   const persona = useMemo(() => state.selectedPersona || personas[0], [state.selectedPersona])
   const displayPersona = useMemo(() => ({ ...persona, ...(personaDisplay[persona.id] || {}) }), [persona])
@@ -196,7 +202,8 @@ function ChatPage() {
     const fallbackLocation = buildMockLocation(baseState)
     const shouldTryLocation =
       options.requestLocation === true ||
-      (!baseState.live_context?.place_name && !baseState.live_context?.city && !baseState.live_context?.latitude)
+      isLocationSensitivePrompt(options.userText) ||
+      (!baseState.live_context?.place_name && !baseState.live_context?.city)
     const browserLocation = shouldTryLocation ? await readBrowserLocation() : null
     const nearbyPlaces = selectLiveNearbyPlaces(options.availablePlaces || places, baseState)
 
@@ -204,16 +211,21 @@ function ChatPage() {
       ...(baseState.live_context || {}),
       local_time: localTime,
       time_of_day: timeOfDay,
+      location_source:
+        browserLocation?.latitude != null
+          ? 'browser'
+          : baseState.live_context?.location_source || baseState.live_context?.source || (baseState.current_place ? 'manual' : 'mock'),
       source:
         browserLocation?.latitude != null
           ? 'browser'
-          : baseState.live_context?.source || (baseState.current_place ? 'user_text' : 'unavailable'),
+          : baseState.live_context?.location_source || baseState.live_context?.source || (baseState.current_place ? 'manual' : 'mock'),
       latitude: browserLocation?.latitude ?? baseState.live_context?.latitude ?? fallbackLocation.latitude,
       longitude: browserLocation?.longitude ?? baseState.live_context?.longitude ?? fallbackLocation.longitude,
       city: baseState.live_context?.city || baseState.current_city || fallbackLocation.city,
       place_name:
         baseState.live_context?.place_name ||
         baseState.current_place ||
+        (browserLocation?.latitude != null ? '当前位置' : '') ||
         fallbackLocation.place_name,
       weather: {
         ...(baseState.live_context?.weather || {}),
@@ -263,6 +275,18 @@ function ChatPage() {
     }
   }, [])
 
+  useEffect(() => {
+    const container = transcriptRef.current
+    if (!container) {
+      return
+    }
+
+    container.scrollTo({
+      top: container.scrollHeight,
+      behavior: 'smooth',
+    })
+  }, [state.messages])
+
   const sendMessage = async (userText = inputText, options = {}) => {
     if (isSending) {
       return null
@@ -290,7 +314,11 @@ function ChatPage() {
     setIsSending(true)
 
     try {
-      const enrichedConversationState = await enrichConversationStateForSend(stateAfterUser.conversationState, options)
+      const enrichedConversationState = await enrichConversationStateForSend(stateAfterUser.conversationState, {
+        ...options,
+        requestLocation: options.requestLocation === true || isLocationSensitivePrompt(cleanText),
+        userText: cleanText,
+      })
       setConversationState(enrichedConversationState)
 
       const payload = {
@@ -448,7 +476,7 @@ function ChatPage() {
         </section>
       )}
 
-      <div className="chat-window call-transcript glass-card">
+      <div ref={transcriptRef} className="chat-window call-transcript glass-card">
         {state.messages.map((message) => (
           <ChatBubble key={message.id} message={message} />
         ))}
