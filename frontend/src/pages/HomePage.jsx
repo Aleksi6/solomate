@@ -1,54 +1,110 @@
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { motion } from 'framer-motion'
-import { BookOpen, Camera, MessageCircle, Sparkles, Trophy } from 'lucide-react'
+import { Camera, Heart, Sparkles } from 'lucide-react'
+import AchievementToast from '../components/AchievementToast'
+import HomeTaskCard from '../components/HomeTaskCard'
+import { getCompanionAvatar } from '../config/personaAssets'
+import { personas } from '../services/api'
+import { getDemoState } from '../store/demoState'
+import { dequeueAchievementToast } from '../utils/achievementStorage'
+import { dismissAchievementToast, evaluateAchievements } from '../utils/achievementEngine'
+import { getActiveCompanionId, getActiveCompanionProfile } from '../utils/companionStorage'
+import { getHomeTaskProgress } from '../utils/taskProgress'
+
+const personaDisplay = {
+  gentle_friend: { name: '温柔朋友型' },
+  local_guide: { name: '本地向导型' },
+  photo_buddy: { name: '摄影搭子型' },
+  budget_planner: { name: '省心规划型' },
+  game_sprite: { name: '任务精灵型' },
+}
 
 function HomePage() {
+  const demoState = getDemoState()
+  const activeCompanionId = getActiveCompanionId()
+  const customCompanion = getActiveCompanionProfile()
+  const fallbackPersona = personas.find((item) => item.id === activeCompanionId) || demoState.selectedPersona || personas[0]
+  const homeTasks = getHomeTaskProgress()
+  const [activeToast, setActiveToast] = useState(null)
+
+  useEffect(() => {
+    evaluateAchievements()
+    setActiveToast((current) => current || dequeueAchievementToast())
+  }, [])
+
+  const handleDismissToast = (achievementId) => {
+    dismissAchievementToast(achievementId)
+    setActiveToast(dequeueAchievementToast())
+  }
+
+  const activeCompanion = customCompanion
+    ? {
+        ...customCompanion,
+        name: customCompanion.name || 'SoloMate',
+        avatar: getCompanionAvatar(customCompanion),
+      }
+    : {
+        ...fallbackPersona,
+        ...(personaDisplay[fallbackPersona.id] || {}),
+        name: personaDisplay[fallbackPersona.id]?.name || fallbackPersona.name || 'SoloMate',
+        avatar: getCompanionAvatar(fallbackPersona),
+      }
+
   return (
     <section className="page home-page diffuse-bg">
-      <motion.section
-        className="home-hero glass-card"
-        initial={{ opacity: 0, y: 16 }}
-        animate={{ opacity: 1, y: 0 }}
-      >
-        <div className="home-hero-orb-wrap">
-          <div className="gradient-orb home-hero-orb" aria-hidden="true" />
-          <div className="voice-orb voice-wave home-buddy-orb" aria-hidden="true" />
+      <AchievementToast achievement={activeToast} onDismiss={handleDismissToast} />
+
+      <div className="page-intro home-top-copy">
+        <p className="eyebrow">SoloMate</p>
+        <h1 className="page-title">今天，我陪你走</h1>
+        <p className="page-subtitle">一个人出发，也有人陪你看见世界。</p>
+      </div>
+
+      <section className="home-hub-card glass-card">
+        <div className="home-hub-orb-wrap" aria-hidden="true">
+          <div className="gradient-orb home-hub-glow" />
+          <div className="voice-orb home-hub-orb">
+            <img className="persona-avatar-image home-hub-avatar-image" src={activeCompanion.avatar} alt={activeCompanion.name} />
+          </div>
         </div>
 
-        <div className="home-hero-copy">
-          <p className="eyebrow">SoloMate</p>
-          <h1 className="page-title">今天，我陪你走</h1>
-          <p className="page-subtitle">一个人出发，也有人陪你看见世界</p>
+        <div className="home-hub-copy">
+          <p className="eyebrow">当前搭子</p>
+          <h2>{activeCompanion.name}</h2>
         </div>
 
-        <div className="home-hero-actions">
-          <Link className="primary-button" to="/persona">
-            <Sparkles size={20} />
-            选择我的旅行搭子
-          </Link>
-          <Link className="ghost-button" to="/photo">
-            <Camera size={19} />
-            拍照寄给搭子
-          </Link>
-        </div>
-      </motion.section>
+        <Link className="primary-button home-main-button" to="/companion-select">
+          <Sparkles size={18} />
+          选择我的旅行搭子
+        </Link>
+      </section>
 
-      <section className="home-entry-grid" aria-label="辅助入口">
-        <Link to="/chat" className="soft-card home-entry-card">
-          <MessageCircle size={22} />
-          <strong>陪伴通话</strong>
-          <span>慢慢说，搭子会在这里听你开口。</span>
+      <section className="home-dual-actions" aria-label="核心入口">
+        <Link className="soft-card home-action-card" to="/photo">
+          <Camera size={22} />
+          <strong>即刻拍照记录</strong>
+          <span>把眼前的风景寄给搭子。</span>
         </Link>
-        <Link to="/badges" className="soft-card home-entry-card stamp-card">
-          <Trophy size={22} />
-          <strong>记忆碎片</strong>
-          <span>掉落、徽章和小瞬间，都收在这里。</span>
+
+        <Link className="soft-card home-action-card" to="/moment">
+          <Heart size={22} />
+          <strong>记录此刻心情</strong>
+          <span>把这一刻收进今天里。</span>
         </Link>
-        <Link to="/diary" className="soft-card home-entry-card home-entry-wide">
-          <BookOpen size={22} />
-          <strong>旅行手账</strong>
-          <span>把今天的路线、心情和风景整理成温柔的一页。</span>
-        </Link>
+      </section>
+
+      <section className="home-task-section">
+        <div className="page-intro home-task-intro">
+          <p className="eyebrow">Today's Tasks</p>
+          <h2>今日可解锁任务</h2>
+          <p className="page-subtitle">完成这些小动作，把今天收进记忆里</p>
+        </div>
+
+        <div className="home-task-list">
+          {homeTasks.map((task) => (
+            <HomeTaskCard key={task.id} task={task} />
+          ))}
+        </div>
       </section>
     </section>
   )

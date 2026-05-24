@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { getCompanionAvatar } from '../config/personaAssets'
 import useSpeechSynthesis from '../hooks/useSpeechSynthesis'
 import ChatComposer from '../components/ChatComposer'
 import ChatHeader from '../components/ChatHeader'
@@ -17,47 +18,25 @@ import {
 } from '../utils/companionStorage'
 
 const personaDisplay = {
-  gentle_friend: {
-    name: '\u6e29\u67d4\u670b\u53cb\u578b',
-    avatar: '\ud83c\udf37',
-    typeLabel: '\u8f7b\u58f0\u966a\u4f34',
-  },
-  local_guide: {
-    name: '\u672c\u5730\u5411\u5bfc\u578b',
-    avatar: '\ud83e\udded',
-    typeLabel: '\u57ce\u5e02\u719f\u95e8\u719f\u8def',
-  },
-  photo_buddy: {
-    name: '\u6444\u5f71\u642d\u5b50\u578b',
-    avatar: '\ud83d\udcf7',
-    typeLabel: '\u4f1a\u770b\u753b\u9762',
-  },
-  budget_planner: {
-    name: '\u7701\u5fc3\u89c4\u5212\u578b',
-    avatar: '\u2601\ufe0f',
-    typeLabel: '\u7a33\u7a33\u5b89\u6392',
-  },
-  game_sprite: {
-    name: '\u4efb\u52a1\u7cbe\u7075\u578b',
-    avatar: '\u2728',
-    typeLabel: '\u8fb9\u8d70\u8fb9\u89e3\u9501',
-  },
+  gentle_friend: { name: '温柔朋友型', typeLabel: '轻声陪伴' },
+  local_guide: { name: '本地向导型', typeLabel: '城市熟门熟路' },
+  photo_buddy: { name: '摄影搭子型', typeLabel: '会看画面' },
+  budget_planner: { name: '省心规划型', typeLabel: '稳稳安排' },
+  game_sprite: { name: '任务精灵型', typeLabel: '边走边解锁' },
 }
 
 const TEXT = {
-  now: '\u521a\u521a',
-  weatherFallback: '\u4eca\u5929\u5929\u6c14\u6674\uff0c\u6162\u6162\u8d70\u4e5f\u5f88\u597d',
-  weatherShort: '\u6674',
-  locationFallback: '\u57ce\u5e02\u4e2d\u5fc3\u4e00\u5e26',
-  locationSuffix: ' \u4e00\u5e26',
-  customCompanion: '\u5171\u521b\u642d\u5b50',
+  now: '刚刚',
+  weatherFallback: '今天天气晴，慢慢走也很好',
+  weatherShort: '晴',
+  locationFallback: '城市中心一带',
+  locationSuffix: ' 一带',
+  customCompanion: '共创搭子',
 }
 
 const formatRecentTime = () => TEXT.now
 
-const buildWeatherHint = (places) => {
-  return places[0] ? TEXT.weatherShort : TEXT.weatherFallback
-}
+const buildWeatherHint = (places) => (places[0] ? TEXT.weatherShort : TEXT.weatherFallback)
 
 const buildLocationHint = (places) => {
   const firstPlace = places[0]
@@ -74,20 +53,18 @@ function ChatPage() {
   const [isVoiceReplyEnabled, setIsVoiceReplyEnabled] = useState(true)
 
   const speechSynthesis = useSpeechSynthesis()
-  const activeCompanionId = useMemo(
-    () => getActiveCompanionId() || state.selectedPersona?.id || personas[0].id,
-    [state.selectedPersona],
-  )
+  const activeCompanionId = useMemo(() => getActiveCompanionId() || state.selectedPersona?.id || personas[0].id, [state.selectedPersona])
   const customCompanion = useMemo(() => getActiveCompanionProfile(), [activeCompanionId])
   const fallbackPersona = useMemo(
     () => personas.find((item) => item.id === activeCompanionId) || state.selectedPersona || personas[0],
     [activeCompanionId, state.selectedPersona],
   )
+
   const displayCompanion = useMemo(() => {
     if (customCompanion) {
       return {
         ...customCompanion,
-        avatar: customCompanion.avatar || '\u2728',
+        avatar: <img className="persona-avatar-image chat-header-avatar-image" src={getCompanionAvatar(customCompanion)} alt={customCompanion.name || TEXT.customCompanion} />,
         typeLabel: customCompanion.typeLabel || TEXT.customCompanion,
       }
     }
@@ -95,6 +72,13 @@ function ChatPage() {
     return {
       ...fallbackPersona,
       ...(personaDisplay[fallbackPersona.id] || {}),
+      avatar: (
+        <img
+          className="persona-avatar-image chat-header-avatar-image"
+          src={getCompanionAvatar(fallbackPersona)}
+          alt={personaDisplay[fallbackPersona.id]?.name || fallbackPersona.name || 'SoloMate'}
+        />
+      ),
     }
   }, [customCompanion, fallbackPersona])
 
@@ -103,6 +87,7 @@ function ChatPage() {
     if (storedMessages.length > 0) return storedMessages
     return state.messages || []
   }, [activeCompanionId, state.messages])
+
   const weatherHint = useMemo(() => buildWeatherHint(places), [places])
   const locationHint = useMemo(() => buildLocationHint(places), [places])
   const activeTask = tasks[0]
@@ -194,9 +179,7 @@ function ChatPage() {
           }}
         />
 
-        <ChatMessageList
-          messages={companionMessages}
-        />
+        <ChatMessageList messages={companionMessages} />
 
         {(replyMeta?.safetyTip || replyMeta?.nextOptions?.length > 0 || triggeredTask) && (
           <section className="chat-meta-strip" aria-label="搭子提示">
@@ -229,14 +212,7 @@ function ChatPage() {
           </section>
         )}
 
-        <ChatComposer
-          disabled={false}
-          isSubmitting={isSending}
-          text={text}
-          onChange={setText}
-          onSubmit={() => sendMessage()}
-          onVoiceMessage={sendMessage}
-        />
+        <ChatComposer disabled={false} isSubmitting={isSending} text={text} onChange={setText} onSubmit={() => sendMessage()} onVoiceMessage={sendMessage} />
 
         <QuickActionBar />
 

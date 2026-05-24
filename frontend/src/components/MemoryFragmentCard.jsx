@@ -1,68 +1,46 @@
 import { Camera, MapPin, Sparkles, Trophy } from 'lucide-react'
 
 const typeMeta = {
-  badge: {
-    icon: Trophy,
-    label: '任务徽章',
-  },
-  achievement: {
-    icon: Sparkles,
-    label: '成就',
-  },
-  random_drop: {
-    icon: Sparkles,
-    label: '随机掉落',
-  },
-  souvenir_card: {
-    icon: Camera,
-    label: '纪念物卡片',
-  },
+  badge: { icon: Trophy, label: '任务徽章' },
+  achievement: { icon: Sparkles, label: '成就' },
+  task_complete: { icon: Trophy, label: '任务完成' },
+  photo_fragment: { icon: Camera, label: '照片碎片' },
+  souvenir_card: { icon: Camera, label: '纪念物卡片' },
+  random_drop: { icon: Sparkles, label: '随机掉落' },
 }
 
-const getCardType = (fragment, sectionType) => {
-  if (sectionType) return sectionType
-  if (fragment.dropKind === 'badge' || fragment.type === 'task_badge') return 'badge'
-  if (fragment.dropKind === 'achievement') return 'achievement'
-  if (fragment.source === 'souvenir_card' || fragment.type === 'souvenir') return 'souvenir_card'
-  return 'random_drop'
-}
-
-function MemoryFragmentCard({ fragment, sectionType }) {
-  const cardType = getCardType(fragment, sectionType)
-  const meta = typeMeta[cardType] || typeMeta.random_drop
+function MemoryFragmentCard({ fragment }) {
+  const meta = typeMeta[fragment.type] || typeMeta.random_drop
   const Icon = meta.icon
-  const hasImage = Boolean(fragment.image)
 
   return (
-    <article
-      className={`memory-fragment-card memory-postcard-card card-${cardType} ${fragment.rarity === 'rare' ? 'is-rare' : ''}`}
-    >
-      <div className="memory-fragment-visual">
-        {hasImage ? (
-          <img className="memory-fragment-photo" src={fragment.image} alt={fragment.title} />
-        ) : (
-          <div className="memory-fragment-glow" aria-hidden="true">
-            <div className="gradient-orb" />
+    <article className={`memory-fragment-card memory-postcard-card variant-${fragment.cardVariant || 'medium'} card-${fragment.type}`}>
+      {fragment.hasImage ? (
+        <div className="memory-fragment-visual">
+          <img className="memory-fragment-photo" src={fragment.image} alt={fragment.title || fragment.mainText || meta.label} />
+          <div className="memory-fragment-stamp">
+            <Icon size={21} />
           </div>
-        )}
-        <div className="memory-fragment-stamp">
-          <Icon size={21} />
         </div>
-      </div>
+      ) : null}
 
       <div className="memory-fragment-copy">
         <div className="memory-fragment-meta">
-          <span>{meta.label}</span>
-          {fragment.location && (
+          <span className="memory-fragment-type">
+            <Icon size={14} />
+            {meta.label}
+          </span>
+          {fragment.location ? (
             <span>
               <MapPin size={13} />
               {fragment.location}
             </span>
-          )}
+          ) : null}
         </div>
-        <h3>{fragment.title}</h3>
-        <p>{fragment.description}</p>
-        {fragment.collectedAt && <small>{fragment.collectedAt}</small>}
+        {fragment.title ? <h3>{fragment.title}</h3> : null}
+        {fragment.mainText ? <p>{fragment.mainText}</p> : null}
+        {!fragment.mainText && fragment.description ? <p>{fragment.description}</p> : null}
+        {fragment.timeLabel ? <small>{fragment.timeLabel}</small> : null}
       </div>
     </article>
   )

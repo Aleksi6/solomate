@@ -199,3 +199,20 @@ export const getCompanionMemoryCount = (companionId = getActiveCompanionId()) =>
   if (!companionId) return 0
   return fragments.filter((fragment) => fragment?.companionId === companionId || fragment?.companion_id === companionId).length
 }
+
+export const getCompanionById = (companionId) => {
+  if (!companionId) return null
+  return getCustomCompanions().find((companion) => companion?.id === companionId) || null
+}
+
+export const getCompanionMessagePreview = (companionId, fallbackText = '') => {
+  const history = getChatHistories()[companionId]
+  const messages = getChatHistoryForCompanion(companionId)
+  const lastMessage = messages[messages.length - 1]
+  return history?.lastMessageText || lastMessage?.text || fallbackText
+}
+
+export const getCompanionBadgeCount = (companionId) => {
+  const meta = getCompanionChatMeta(companionId)
+  return Number(meta.unreadCount || 0) + Number(meta.newMemoryCount || 0)
+}
