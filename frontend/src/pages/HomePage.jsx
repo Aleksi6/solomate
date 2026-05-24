@@ -93,14 +93,14 @@ function HomePage() {
         </Link>
       </section>
 
-      <section className="home-task-section">
+      <section className="home-task-section glass-card">
         <div className="page-intro home-task-intro">
           <p className="eyebrow">Today's Tasks</p>
           <h2>今日可解锁任务</h2>
-          <p className="page-subtitle">完成这些小动作，把今天收进记忆里</p>
+          <p className="page-subtitle">左右滑着看，把今天的小目标慢慢收进记忆里。</p>
         </div>
 
-        <div className="home-task-list">
+        <div className="home-task-list" aria-label="今日可解锁任务">
           {homeTasks.map((task) => (
             <HomeTaskCard key={task.id} task={task} />
           ))}

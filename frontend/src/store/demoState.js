@@ -8,6 +8,9 @@ export const MEMORY_FRAGMENTS_KEY = 'solomate_memory_fragments'
 export const BADGES_KEY = 'solomate_badges'
 export const COMPLETED_TASKS_KEY = 'solomate_completed_tasks'
 export const DIARY_KEY = 'solomate_diary'
+export const LAST_PROACTIVE_AT_KEY = 'solomate_last_proactive_at'
+export const LAST_USER_MESSAGE_AT_KEY = 'solomate_last_user_message_at'
+export const PROACTIVE_COUNT_TODAY_KEY = 'solomate_proactive_count_today'
 
 const SELECTED_PERSONA_KEY = 'selectedPersona'
 const PERSONA_ID_KEY = 'persona_id'
@@ -179,6 +182,7 @@ const normalizeMessage = (message = {}, selectedPersonaId = personas[0].id) => {
     persona_id: message.persona_id || selectedPersonaId,
     reply_type: message.reply_type || '',
     emotion_detected: message.emotion_detected || '',
+    message_type: message.message_type || '',
   }
 }
 
@@ -302,6 +306,9 @@ const ensureSessionFresh = () => {
   localStorage.removeItem(COMPLETED_TASKS_KEY)
   localStorage.removeItem(LEGACY_COMPLETED_TASKS_KEY)
   localStorage.removeItem(DIARY_KEY)
+  localStorage.removeItem(LAST_PROACTIVE_AT_KEY)
+  localStorage.removeItem(LAST_USER_MESSAGE_AT_KEY)
+  localStorage.removeItem(PROACTIVE_COUNT_TODAY_KEY)
 }
 
 const readBadgeRecords = () => {
@@ -405,6 +412,10 @@ const cleanPlaceCandidate = (value = '') => {
   place = place.replace(/(附近|周边)+$/g, '')
   place = place.trim()
 
+  if (/^(我现在|我这边|我这里|当前位置)$/.test(place)) {
+    return ''
+  }
+
   if (!place || place.length > 16 || PLACE_STOP_WORDS.has(place)) {
     return ''
   }
@@ -417,11 +428,13 @@ export const extractExplicitPlace = (userText = '') => {
   if (!text) return ''
 
   const patterns = [
+    /(?:我现在在|我其实想去|我又想去|我想去|我要去|准备去|想去)([^，。？?！!、\s\n]{1,16})/,
     /(?:我又想去|我想去|我要去|准备去|想去)([^，。？?！!、\s\n]{1,16})/,
     /(?:去)([^，。？?！!、\s\n]{1,16})(?:玩|逛|看看|打卡)?/,
     /(?:到)([^，。？?！!、\s\n]{1,16})了/,
     /(?:我在)([^，。？?！!、\s\n]{1,16})/,
     /(?:想找|想吃|想喝)([^，。？?！!、\s\n]{1,16})/,
+    /([^，。？?！!、\s\n]{1,16})附近(?:有什么|有啥|有什么好吃的|哪里好拍照)/,
     /([^，。？?！!、\s\n]{1,16})(?:哪里好拍照|哪儿好拍|怎么拍|好拍吗|有什么好吃的|有啥好吃的|人好多|好多人)/,
   ]
 
@@ -571,6 +584,16 @@ export const deriveConversationStateFromUserText = (userText = '', previousState
   } else if (explicitPlace) {
     if (isCurrentPlace) {
       nextState.current_place = explicitPlace
+      if (!nextState.current_city || /^[A-Za-z\u4e00-\u9fa5]{2,8}$/.test(explicitPlace)) {
+        nextState.current_city = explicitPlace
+      }
+      nextState.live_context = {
+        ...nextState.live_context,
+        place_name: explicitPlace,
+        city: nextState.current_city || explicitPlace,
+        location_source: 'user_declared',
+        source: 'user_declared',
+      }
     } else {
       nextState.target_place = explicitPlace
     }
@@ -632,6 +655,7 @@ export const addMessage = (message) => {
   let conversationState = state.conversationState
 
   if (normalizedMessage.role === 'user') {
+    localStorage.setItem(LAST_USER_MESSAGE_AT_KEY, normalizedMessage.timestamp)
     conversationState = deriveConversationStateFromUserText(normalizedMessage.text, conversationState)
   }
 
@@ -765,6 +789,9 @@ export const resetDemoState = () => {
     BADGES_KEY,
     COMPLETED_TASKS_KEY,
     DIARY_KEY,
+    LAST_PROACTIVE_AT_KEY,
+    LAST_USER_MESSAGE_AT_KEY,
+    PROACTIVE_COUNT_TODAY_KEY,
     SELECTED_PERSONA_KEY,
     PERSONA_ID_KEY,
     VISITED_PLACES_KEY,
@@ -780,4 +807,16 @@ export const resetDemoState = () => {
   localStorage.setItem(CONVERSATION_ID_KEY, createConversationId())
 
   return persistState(initialState)
+}
+
+export const getProactiveMeta = () => ({
+  lastProactiveAt: localStorage.getItem(LAST_PROACTIVE_AT_KEY) || '',
+  lastUserMessageAt: localStorage.getItem(LAST_USER_MESSAGE_AT_KEY) || '',
+  proactiveCountToday: Number(localStorage.getItem(PROACTIVE_COUNT_TODAY_KEY) || '0'),
+})
+
+export const markProactiveMessage = (timestamp = new Date().toISOString()) => {
+  localStorage.setItem(LAST_PROACTIVE_AT_KEY, timestamp)
+  const count = Number(localStorage.getItem(PROACTIVE_COUNT_TODAY_KEY) || '0')
+  localStorage.setItem(PROACTIVE_COUNT_TODAY_KEY, String(count + 1))
 }

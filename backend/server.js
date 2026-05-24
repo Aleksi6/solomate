@@ -43,5 +43,5 @@ app.use((err, req, res, next) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`SoloMate mock backend is running at http://localhost:${PORT}`);
+  console.log(`SoloMate backend is running at http://localhost:${PORT}`);
 });

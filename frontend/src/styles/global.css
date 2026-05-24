@@ -189,6 +189,7 @@ h3 {
 .home-page {
   padding-top: 34px;
   gap: 22px;
+  min-height: calc(100svh - 92px);
 }
 
 .page-intro {
@@ -1226,6 +1227,23 @@ h3 {
   box-shadow: 0 10px 24px rgba(131, 124, 182, 0.12);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
+}
+
+.chat-row.is-proactive .chat-bubble {
+  border: 1px solid rgba(122, 184, 149, 0.28);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.82), rgba(240, 250, 244, 0.72));
+}
+
+.chat-bubble-badge {
+  display: inline-flex;
+  align-items: center;
+  margin-bottom: 8px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  color: var(--green);
+  background: rgba(168, 216, 187, 0.2);
+  font-size: 0.72rem;
+  font-weight: 800;
 }
 
 .from-user .chat-bubble {
@@ -2407,6 +2425,13 @@ h3 {
   flex: 0 0 auto;
 }
 
+.chat-proactive-note {
+  padding: 0 6px;
+  color: var(--text-soft);
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
 .chat-meta-card {
   padding: 10px 12px;
   display: flex;
@@ -2649,7 +2674,9 @@ h3 {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  padding: 18px 16px;
   padding-top: 8px;
+  overflow: hidden;
 }
 
 .home-task-intro {
@@ -2657,12 +2684,22 @@ h3 {
 }
 
 .home-task-list {
-  display: grid;
-  grid-template-columns: 1fr;
+  display: flex;
   gap: 12px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  scroll-snap-type: x proximity;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.home-task-list::-webkit-scrollbar {
+  display: none;
 }
 
 .home-task-card {
+  flex: 0 0 min(82vw, 280px);
+  scroll-snap-align: start;
   min-height: 132px;
   padding: 16px;
   display: flex;

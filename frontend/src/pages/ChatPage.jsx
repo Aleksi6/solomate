@@ -6,46 +6,134 @@ import ChatHeader from '../components/ChatHeader'
 import ChatMessageList from '../components/ChatMessageList'
 import NearbyRecommendPanel from '../components/NearbyRecommendPanel'
 import QuickActionBar from '../components/QuickActionBar'
-import { getMockPlaces, personas, sendChatMessage, tasks } from '../services/api'
-import { addMessage, addVisitedPlace, completeTask, getDemoState } from '../store/demoState'
+import { getMockPlaces, personas, requestProactiveCare, sendChatMessage, tasks } from '../services/api'
 import {
-  appendChatMessageForCompanion,
-  getActiveCompanionId,
-  getActiveCompanionProfile,
-  getChatHistoryForCompanion,
-  setActiveCompanionId,
-  setChatHistoryForCompanion,
-} from '../utils/companionStorage'
+  addMessage,
+  addVisitedPlace,
+  completeTask,
+  getConversationId,
+  getDemoState,
+  getProactiveMeta,
+  markProactiveMessage,
+  setConversationState,
+} from '../store/demoState'
+import { getActiveCompanionId, getActiveCompanionProfile, setActiveCompanionId } from '../utils/companionStorage'
+
+const PROACTIVE_COOLDOWN_MS = 180 * 1000
+const PROACTIVE_AFTER_USER_MS = 60 * 1000
+const PROACTIVE_MAX_PER_DAY = 5
 
 const personaDisplay = {
-  gentle_friend: { name: '温柔朋友型', typeLabel: '轻声陪伴' },
-  local_guide: { name: '本地向导型', typeLabel: '城市熟门熟路' },
-  photo_buddy: { name: '摄影搭子型', typeLabel: '会看画面' },
-  budget_planner: { name: '省心规划型', typeLabel: '稳稳安排' },
-  game_sprite: { name: '任务精灵型', typeLabel: '边走边解锁' },
+  gentle_friend: { name: '温柔朋友型' },
+  local_guide: { name: '本地向导型' },
+  photo_buddy: { name: '摄影搭子型' },
+  budget_planner: { name: '省心规划型' },
+  game_sprite: { name: '任务精灵型' },
 }
 
-const TEXT = {
-  now: '刚刚',
-  weatherFallback: '今天天气晴，慢慢走也很好',
-  weatherShort: '晴',
-  locationFallback: '城市中心一带',
-  locationSuffix: ' 一带',
-  customCompanion: '共创搭子',
+const formatRecentTime = (timestamp = Date.now()) =>
+  new Intl.DateTimeFormat('zh-CN', {
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(new Date(timestamp))
+
+const toLocalIsoString = (date = new Date()) => {
+  const pad = (value) => String(value).padStart(2, '0')
+  const year = date.getFullYear()
+  const month = pad(date.getMonth() + 1)
+  const day = pad(date.getDate())
+  const hour = pad(date.getHours())
+  const minute = pad(date.getMinutes())
+  const second = pad(date.getSeconds())
+  const offsetMinutes = -date.getTimezoneOffset()
+  const sign = offsetMinutes >= 0 ? '+' : '-'
+  const offsetHours = pad(Math.floor(Math.abs(offsetMinutes) / 60))
+  const offsetRestMinutes = pad(Math.abs(offsetMinutes) % 60)
+  return `${year}-${month}-${day}T${hour}:${minute}:${second}${sign}${offsetHours}:${offsetRestMinutes}`
 }
 
-const formatRecentTime = () => TEXT.now
+const getTimeOfDay = (date = new Date()) => {
+  const hour = date.getHours()
+  if (hour >= 5 && hour < 11) return 'morning'
+  if (hour >= 11 && hour < 14) return 'noon'
+  if (hour >= 14 && hour < 18) return 'afternoon'
+  if (hour >= 18 && hour < 22) return 'evening'
+  return 'night'
+}
 
-const buildWeatherHint = (places) => (places[0] ? TEXT.weatherShort : TEXT.weatherFallback)
+const buildHistoryPayload = (messages = []) =>
+  messages.slice(-12).map((message) => ({
+    role: message.role,
+    text: message.text,
+    timestamp: message.timestamp,
+    persona_id: message.persona_id,
+  }))
 
-const buildLocationHint = (places) => {
-  const firstPlace = places[0]
-  if (!firstPlace) return TEXT.locationFallback
-  return `${firstPlace.name}${TEXT.locationSuffix}`
+const buildLocationPayload = (conversationState = {}) => {
+  const liveContext = conversationState.live_context || {}
+  const city = liveContext.city || conversationState.current_city || ''
+  const placeName = liveContext.place_name || conversationState.current_place || ''
+
+  if (!city && !placeName) {
+    return {}
+  }
+
+  return {
+    city,
+    place_name: placeName,
+  }
+}
+
+const buildWeatherHint = (conversationState = {}) => {
+  const weather = conversationState.live_context?.weather || {}
+  if (weather.temperature_c != null && weather.condition) {
+    return `${weather.temperature_c}° ${weather.condition}`
+  }
+  return '天气会一起看'
+}
+
+const buildLocationHint = (conversationState = {}, places = []) => {
+  const liveContext = conversationState.live_context || {}
+  return (
+    liveContext.place_name ||
+    conversationState.current_place ||
+    conversationState.target_place ||
+    conversationState.current_city ||
+    places[0]?.name ||
+    '地点可以随时告诉我'
+  )
+}
+
+const buildConversationStateForSend = (conversationState = {}, places = []) => {
+  const now = new Date()
+  const localTime = toLocalIsoString(now)
+  const timeOfDay = getTimeOfDay(now)
+  const currentPlace = conversationState.current_place || conversationState.live_context?.place_name || ''
+  const currentCity = conversationState.current_city || conversationState.live_context?.city || ''
+  const targetPlace = conversationState.target_place || ''
+  const locationSource =
+    conversationState.live_context?.location_source ||
+    conversationState.live_context?.source ||
+    (currentPlace || currentCity ? 'user_declared' : 'none')
+
+  return {
+    ...conversationState,
+    live_context: {
+      ...(conversationState.live_context || {}),
+      local_time: localTime,
+      time_of_day: timeOfDay,
+      location_source: locationSource,
+      source: locationSource,
+      city: conversationState.live_context?.city || currentCity,
+      place_name: conversationState.live_context?.place_name || currentPlace || targetPlace,
+      nearby_places: Array.isArray(places) ? places.slice(0, 6) : [],
+      weather: conversationState.live_context?.weather || {},
+    },
+  }
 }
 
 function ChatPage() {
-  const [state, setState] = useState(getDemoState())
+  const [state, setState] = useState(() => getDemoState())
   const [places, setPlaces] = useState([])
   const [text, setText] = useState('')
   const [isSending, setIsSending] = useState(false)
@@ -64,8 +152,7 @@ function ChatPage() {
     if (customCompanion) {
       return {
         ...customCompanion,
-        avatar: <img className="persona-avatar-image chat-header-avatar-image" src={getCompanionAvatar(customCompanion)} alt={customCompanion.name || TEXT.customCompanion} />,
-        typeLabel: customCompanion.typeLabel || TEXT.customCompanion,
+        avatar: <img className="persona-avatar-image chat-header-avatar-image" src={getCompanionAvatar(customCompanion)} alt={customCompanion.name || 'SoloMate'} />,
       }
     }
 
@@ -82,77 +169,163 @@ function ChatPage() {
     }
   }, [customCompanion, fallbackPersona])
 
-  const companionMessages = useMemo(() => {
-    const storedMessages = getChatHistoryForCompanion(activeCompanionId)
-    if (storedMessages.length > 0) return storedMessages
-    return state.messages || []
-  }, [activeCompanionId, state.messages])
-
-  const weatherHint = useMemo(() => buildWeatherHint(places), [places])
-  const locationHint = useMemo(() => buildLocationHint(places), [places])
+  const messages = state.messages || []
+  const weatherHint = useMemo(() => buildWeatherHint(state.conversationState), [state.conversationState])
+  const locationHint = useMemo(() => buildLocationHint(state.conversationState, places), [state.conversationState, places])
   const activeTask = tasks[0]
+
+  const refreshState = () => {
+    const nextState = getDemoState()
+    setState(nextState)
+    return nextState
+  }
+
+  const checkProactiveCare = async (force = false) => {
+    if (isSending) return
+
+    const currentState = getDemoState()
+    if (!currentState.messages?.length) return
+
+    const meta = getProactiveMeta()
+    const now = Date.now()
+    const lastProactiveAt = meta.lastProactiveAt ? new Date(meta.lastProactiveAt).getTime() : 0
+    const lastUserMessageAt = meta.lastUserMessageAt ? new Date(meta.lastUserMessageAt).getTime() : 0
+
+    if (!force) {
+      if (meta.proactiveCountToday >= PROACTIVE_MAX_PER_DAY) return
+      if (lastProactiveAt && now - lastProactiveAt < PROACTIVE_COOLDOWN_MS) return
+      if (lastUserMessageAt && now - lastUserMessageAt < PROACTIVE_AFTER_USER_MS) return
+    }
+
+    const enrichedConversationState = buildConversationStateForSend(currentState.conversationState, places)
+
+    const response = await requestProactiveCare({
+      conversation_id: getConversationId(),
+      persona_id: fallbackPersona.id,
+      conversation_state: enrichedConversationState,
+      history: buildHistoryPayload(currentState.messages),
+      live_context: enrichedConversationState.live_context,
+    })
+
+    if (!response?.should_send || !response?.message) return
+
+    const timestamp = new Date().toISOString()
+    addMessage({
+      id: crypto.randomUUID(),
+      role: 'assistant',
+      text: response.message,
+      time: formatRecentTime(timestamp),
+      timestamp,
+      persona_id: fallbackPersona.id,
+      message_type: 'proactive',
+      reply_type: 'proactive',
+      emotion_detected: enrichedConversationState.mood || 'uncertain',
+    })
+    markProactiveMessage(timestamp)
+    refreshState()
+  }
 
   useEffect(() => {
     setActiveCompanionId(activeCompanionId)
   }, [activeCompanionId])
 
   useEffect(() => {
-    getMockPlaces().then(setPlaces)
+    let cancelled = false
+    getMockPlaces().then((data) => {
+      if (cancelled) return
+      setPlaces(Array.isArray(data) ? data : [])
+      const currentState = getDemoState()
+      const enrichedConversationState = buildConversationStateForSend(currentState.conversationState, Array.isArray(data) ? data : [])
+      setConversationState(enrichedConversationState)
+      refreshState()
+    })
+
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   useEffect(() => {
-    if (getChatHistoryForCompanion(activeCompanionId).length === 0 && state.messages?.length) {
-      setChatHistoryForCompanion(activeCompanionId, state.messages)
-    }
-  }, [activeCompanionId, state.messages])
+    const intervalId = window.setInterval(() => {
+      checkProactiveCare(false)
+    }, PROACTIVE_COOLDOWN_MS)
 
-  const sendMessage = async (input = text) => {
+    window.solomateCheckProactiveCare = () => checkProactiveCare(true)
+
+    return () => {
+      window.clearInterval(intervalId)
+      delete window.solomateCheckProactiveCare
+    }
+  }, [places, isSending, fallbackPersona.id, state.messages, state.conversationState])
+
+  const sendMessage = async (input = text, options = {}) => {
     if (isSending) return null
 
-    const clean = input.trim()
+    const clean = String(input || '').trim()
     if (!clean) return null
 
-    const userMessage = { id: crypto.randomUUID(), role: 'user', text: clean, time: formatRecentTime() }
-    const nextHistory = [...companionMessages, userMessage]
+    const timestamp = new Date().toISOString()
+    const userMessage = {
+      id: crypto.randomUUID(),
+      role: 'user',
+      text: clean,
+      time: formatRecentTime(timestamp),
+      timestamp,
+      persona_id: fallbackPersona.id,
+    }
 
     addMessage(userMessage)
-    appendChatMessageForCompanion(activeCompanionId, userMessage)
     setText('')
-    setState(getDemoState())
+    const stateAfterUser = refreshState()
     setIsSending(true)
 
     try {
-      const reply = await sendChatMessage({
+      const enrichedConversationState = buildConversationStateForSend(stateAfterUser.conversationState, places)
+      setConversationState(enrichedConversationState)
+
+      const payload = {
+        conversation_id: getConversationId(),
         user_text: clean,
         persona_id: fallbackPersona.id,
-        mode: 'decision',
+        mode: options.mode || 'chat',
+        location: buildLocationPayload(enrichedConversationState),
         context: {
-          travel_mode: 'solo',
-          mood: 'uncertain',
+          travel_mode: enrichedConversationState.travel_mode || 'solo',
+          mood: enrichedConversationState.mood || 'uncertain',
+          source: options.source || 'text',
         },
         nearby_places: places,
-        history: nextHistory,
-      })
+        history: buildHistoryPayload(stateAfterUser.messages),
+        conversation_state: enrichedConversationState,
+        live_context: enrichedConversationState.live_context,
+      }
+
+      const reply = await sendChatMessage(payload)
+      const safeReply = reply && typeof reply === 'object' ? reply : {}
+      const assistantTimestamp = new Date().toISOString()
 
       const buddyMessage = {
         id: crypto.randomUUID(),
-        role: 'buddy',
-        text: reply.reply_text,
-        time: formatRecentTime(),
+        role: 'assistant',
+        text: safeReply.reply_text || '我接住你这句话了，不过这次回复没有顺利回来。你再发一句，我继续陪你。',
+        time: formatRecentTime(assistantTimestamp),
+        timestamp: assistantTimestamp,
+        persona_id: fallbackPersona.id,
+        reply_type: safeReply.reply_type || '',
+        emotion_detected: safeReply.emotion_detected || '',
       }
 
       addMessage(buddyMessage)
-      appendChatMessageForCompanion(activeCompanionId, buddyMessage)
       completeTask('first_voice_task', activeTask.rewardBadge)
       setReplyMeta({
-        nextOptions: reply.next_options || [],
-        safetyTip: reply.safety_tip || '',
-        taskTriggered: reply.task_triggered || '',
+        nextOptions: safeReply.next_options || [],
+        safetyTip: safeReply.safety_tip || '',
+        taskTriggered: safeReply.task_triggered || '',
       })
-      setState(getDemoState())
+      refreshState()
 
-      if (isVoiceReplyEnabled) {
-        speechSynthesis.speak(reply.reply_text)
+      if (isVoiceReplyEnabled && buddyMessage.text) {
+        speechSynthesis.speak(buddyMessage.text)
       } else {
         speechSynthesis.cancel()
       }
@@ -179,7 +352,18 @@ function ChatPage() {
           }}
         />
 
-        <ChatMessageList messages={companionMessages} />
+        <ChatMessageList messages={messages} />
+
+        <p className="chat-proactive-note">你停下来一会儿时，搭子会像微信好友一样主动问你一句。</p>
+
+        <ChatComposer
+          disabled={false}
+          isSubmitting={isSending}
+          text={text}
+          onChange={setText}
+          onSubmit={() => sendMessage()}
+          onVoiceMessage={(value) => sendMessage(value, { source: 'voice' })}
+        />
 
         {(replyMeta?.safetyTip || replyMeta?.nextOptions?.length > 0 || triggeredTask) && (
           <section className="chat-meta-strip" aria-label="搭子提示">
@@ -195,7 +379,7 @@ function ChatPage() {
                 <p className="eyebrow">下一步建议</p>
                 <div className="chat-inline-actions">
                   {replyMeta.nextOptions.map((option) => (
-                    <button key={option} type="button" className="pill-button" onClick={() => sendMessage(option)}>
+                    <button key={option} type="button" className="pill-button" onClick={() => sendMessage(option, { source: 'quick-action' })}>
                       {option}
                     </button>
                   ))}
@@ -212,8 +396,6 @@ function ChatPage() {
           </section>
         )}
 
-        <ChatComposer disabled={false} isSubmitting={isSending} text={text} onChange={setText} onSubmit={() => sendMessage()} onVoiceMessage={sendMessage} />
-
         <QuickActionBar />
 
         <NearbyRecommendPanel
@@ -222,11 +404,11 @@ function ChatPage() {
           done={state.completedTasks.includes(activeTask.id)}
           onVisit={(placeId) => {
             addVisitedPlace(placeId)
-            setState(getDemoState())
+            refreshState()
           }}
           onComplete={(task) => {
             completeTask(task.id, task.rewardBadge)
-            setState(getDemoState())
+            refreshState()
           }}
         />
       </div>

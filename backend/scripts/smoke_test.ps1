@@ -7,6 +7,7 @@ $serverProcess = $null
 $env:PORT = "3101"
 $env:LLM_ENABLE = "false"
 $env:VISION_ENABLE = "false"
+$env:WEATHER_ENABLE = "false"
 
 function U {
   param([int[]]$CodePoints)
@@ -168,6 +169,12 @@ try {
 
   $liveContextStatus = Invoke-JsonGet -Url "$baseUrl/api/live-context-status"
   Assert-Fields -Name "live-context-status" -Object $liveContextStatus -Fields @("geolocation_recommended", "weather_enable", "weather_has_api_key", "fallback")
+
+  $weatherStatus = Invoke-JsonGet -Url "$baseUrl/api/weather-status"
+  Assert-Fields -Name "weather-status" -Object $weatherStatus -Fields @("weather_enable", "weather_provider", "requires_api_key", "fallback")
+
+  $proactiveStatus = Invoke-JsonGet -Url "$baseUrl/api/proactive-care-status"
+  Assert-Fields -Name "proactive-care-status" -Object $proactiveStatus -Fields @("enabled", "mode", "max_per_day", "cooldown_seconds")
 
   $greeting = Invoke-JsonPost -Url "$baseUrl/api/chat" -Payload @{
     conversation_id = "smoke-greeting"
@@ -388,6 +395,41 @@ try {
   }
   Assert-Fields -Name "chat-case-7" -Object $case7 -Fields @("reply_text", "reply_type", "emotion_detected", "suggested_action", "safety_tip", "next_options", "task_triggered")
   Assert-True -Name "chat-case-7" -Condition (-not $case7.reply_text.Contains($bund)) -Message "nearby food reply should not fall back to old target place when only coordinates are available"
+
+  $proactive = Invoke-JsonPost -Url "$baseUrl/api/proactive-care" -Payload @{
+    conversation_id = "smoke-proactive"
+    persona_id = "gentle_friend"
+    history = @(
+      @{
+        role = "user"
+        text = $wantBundAgain
+        timestamp = "2026-05-24T12:03:00.000Z"
+        persona_id = "gentle_friend"
+      }
+    )
+    conversation_state = @{
+      target_place = $bund
+      live_context = @{
+        local_time = "2026-05-24T20:30:00+08:00"
+        time_of_day = "night"
+        weather = @{
+          source = "mock"
+          rain_probability = 80
+          condition = "rain"
+        }
+      }
+    }
+    live_context = @{
+      local_time = "2026-05-24T20:30:00+08:00"
+      time_of_day = "night"
+      weather = @{
+        source = "mock"
+        rain_probability = 80
+        condition = "rain"
+      }
+    }
+  }
+  Assert-Fields -Name "proactive-care" -Object $proactive -Fields @("should_send", "message", "reason", "cooldown_seconds")
 
   $photo = Invoke-JsonPost -Url "$baseUrl/api/analyze-photo" -Payload @{
     task_id = "firework_photo_task"

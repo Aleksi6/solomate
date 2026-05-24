@@ -256,6 +256,18 @@ function fallbackChatResponse(input = {}) {
     });
   }
 
+  if (intent === "food") {
+    return normalizeChatResponse({
+      reply_text: "如果你现在不想开定位也没关系。你告诉我一个大概地点，比如商圈、地铁站、景点或住的附近，我就能把吃的收得更准一点；如果只是先想个方向，我也可以先按正餐、小吃、咖啡这三类陪你挑。",
+      reply_type: "food_advice",
+      emotion_detected: input.emotion_detected || "uncertain",
+      suggested_action: "find_food_nearby",
+      safety_tip: liveContext.time_of_day === "night" ? "夜里找吃的别为了绕路走太偏，优先亮一点、进出方便的店。" : "一个人找吃的时，优先选明亮、开阔、进出方便的店。",
+      next_options: ["我在地铁站附近", "想吃正餐", "想吃小吃"],
+      task_triggered: ""
+    });
+  }
+
   if (intent === "photo" && topicPlace) {
     return normalizeChatResponse({
       reply_text: `${topicPlace}如果想拍得更出片，先别急着站最热门的正面机位。找侧一点、层次更开的角度，再把灯光、路面引导线或者一点人流带进画面，会更有旅行现场感。`,
