@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Check, Heart, ImagePlus } from 'lucide-react'
+import { analyzePhoto } from '../services/api'
 import { saveMoodMoment } from '../utils/memoryStorage'
 
 const moodTags = ['轻松', '有点累', '想记录', '小确幸', '晚风', '迷路了']
@@ -22,6 +23,7 @@ function MomentPage() {
   const [selectedTags, setSelectedTags] = useState([])
   const [imageName, setImageName] = useState('')
   const [imageData, setImageData] = useState('')
+  const [imageAnalysis, setImageAnalysis] = useState(null)
   const [saved, setSaved] = useState(false)
 
   const toggleTag = (tag) => {
@@ -32,14 +34,29 @@ function MomentPage() {
     const file = event.target.files?.[0]
     setImageName(file?.name || '')
     setImageData(await readImageAsDataUrl(file))
+    setImageAnalysis(null)
+
+    if (file) {
+      const analysis = await analyzePhoto({
+        file,
+        image: file.name,
+        photo_mode: 'moment',
+        user_question: '帮我识别这张记忆碎片，并给今天的日记留一点可用信息',
+      })
+      setImageAnalysis(analysis)
+    }
   }
 
   const handleSave = () => {
     saveMoodMoment({
-      content: text,
-      tags: selectedTags,
+      content: text || imageAnalysis?.memory_fragment?.description || imageAnalysis?.scene_summary || '',
+      tags: [
+        ...selectedTags,
+        ...(imageAnalysis?.visual_tags || []),
+        ...(imageAnalysis?.memory_fragment?.tags || []),
+      ].filter(Boolean),
       image: imageData,
-      title: text ? text.slice(0, 12) : imageName || '此刻心情',
+      title: text ? text.slice(0, 12) : imageAnalysis?.memory_fragment?.title || imageName || '此刻心情',
     })
     setSaved(true)
   }

@@ -66,6 +66,7 @@ function PhotoPage() {
       setEnvironmentResult(null)
 
       const analysis = await analyzePhoto({
+        file,
         image: file.name,
         user_question: '帮我看看这个瞬间值不值得收进今天',
         photo_mode: 'souvenir',
@@ -89,6 +90,7 @@ function PhotoPage() {
     setSouvenirResult(null)
 
     const analysis = await analyzePhoto({
+      file,
       image: file.name,
       task_id: 'firework_photo_task',
       user_question: '这张照片能完成任务吗？',

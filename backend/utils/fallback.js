@@ -380,9 +380,13 @@ function fallbackDiary(input = {}) {
   const moodHistory = Array.isArray(safeInput.mood_history) && safeInput.mood_history.length > 0
     ? safeInput.mood_history
     : ["uncertain", "relaxed"];
+  const memorySummary = String(safeInput.chat_summary || "").trim();
+  const memoryLine = memorySummary
+    ? `你还收下了这些画面：${memorySummary.replace(/\s+/g, " ").slice(0, 90)}。`
+    : "";
 
   return {
-    diary: `今天你一个人走过了${places.join("、")}。一开始你有点${moodHistory[0]}，但你还是慢慢做出了下一步选择，也把这段路认真记录了下来。`,
+    diary: `今天你一个人走过了${places.join("、")}。一开始你有点${moodHistory[0]}，但你还是慢慢做出了下一步选择，也把这段路认真记录了下来。${memoryLine}`,
     share_caption: `一个人的旅行，也会遇到刚刚好的热闹。今天解锁：${badges.join("、")}。`,
     summary_tags: ["单人旅行", "AI搭子", "城市探索"]
   };
@@ -462,7 +466,13 @@ function normalizePhotoAnalysisResponse(partial = {}) {
       reward_badge: taskResult.reward_badge || "",
       reason: taskResult.reason || "当前为 Demo mock 判定。"
     },
-    reply_text: input.reply_text || "我先把这张照片替你收下来了，它已经可以作为今天的一枚记忆碎片。"
+    reply_text: input.reply_text || "我先把这张照片替你收下来了，它已经可以作为今天的一枚记忆碎片。",
+    visual_tags: Array.isArray(input.visual_tags) ? input.visual_tags.filter(Boolean) : [],
+    detected_scene_type: input.detected_scene_type || "",
+    confidence: typeof input.confidence === "number" ? input.confidence : 0,
+    memory_fragment: input.memory_fragment && typeof input.memory_fragment === "object" ? input.memory_fragment : null,
+    demo_fixture: Boolean(input.demo_fixture),
+    demo_image_name: input.demo_image_name || ""
   };
 }
 

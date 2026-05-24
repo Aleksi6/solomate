@@ -1,6 +1,7 @@
 const { loadEnvFile, readPromptFile } = require("../utils/json_loader");
 const { fallbackPhotoAnalysis, normalizePhotoAnalysisResponse, parseJsonObject } = require("../utils/fallback");
 const { callCompatibleChatCompletion, generateStructuredJson, isLlmEnabled } = require("./llm_service");
+const { findDemoVisionAnalysis } = require("./demo_vision_fixtures");
 const { getTask } = require("./task_service");
 
 loadEnvFile();
@@ -209,11 +210,17 @@ function buildPolishMessages({ task, personaId, fallbackResponse }) {
 async function analyzePhoto(input = {}) {
   const task = getTask(input.task_id || "firework_photo_task");
   const hasImage = Boolean(input.file?.buffer);
+  const demoAnalysis = findDemoVisionAnalysis(input);
   const visionAvailable = isVisionEnabled();
   const fallbackResult = evaluateTaskResult({ task, visionData: null, visionUsed: false });
   let response = buildMockAnalysis({ task, taskResult: fallbackResult });
   let visionUsed = false;
   let llmPolishUsed = false;
+
+  if (demoAnalysis) {
+    console.log(`[PHOTO] demo_fixture=${demoAnalysis.demo_image_name}`);
+    return normalizePhotoAnalysisResponse(demoAnalysis);
+  }
 
   console.log(`[PHOTO] vision_enabled=${visionAvailable}`);
 

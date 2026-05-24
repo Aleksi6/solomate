@@ -65,6 +65,15 @@ function DiaryDetailPage() {
     [state.moodHistory],
   )
   const memoryImages = useMemo(() => timeline.filter((item) => item.hasImage).slice(0, 6), [timeline])
+  const memorySummary = useMemo(
+    () =>
+      timeline
+        .slice(0, 8)
+        .map((item) => [item.title, item.mainText || item.description, (item.tags || []).join('/')].filter(Boolean).join('：'))
+        .filter(Boolean)
+        .join('\n'),
+    [timeline],
+  )
 
   const visitedPlacesKey = useMemo(() => JSON.stringify(visitedPlaces), [visitedPlaces])
   const moodHistoryKey = useMemo(() => JSON.stringify(moodHistory), [moodHistory])
@@ -75,8 +84,9 @@ function DiaryDetailPage() {
       visited_places: JSON.parse(visitedPlacesKey),
       badges: JSON.parse(badgesKey),
       mood_history: JSON.parse(moodHistoryKey),
+      chat_summary: memorySummary,
     }),
-    [visitedPlacesKey, badgesKey, moodHistoryKey],
+    [visitedPlacesKey, badgesKey, moodHistoryKey, memorySummary],
   )
 
   useEffect(() => {
