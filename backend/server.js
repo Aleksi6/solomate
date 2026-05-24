@@ -6,7 +6,10 @@ const photoRoutes = require("./routes/photo");
 const diaryRoutes = require("./routes/diary");
 const placesRoutes = require("./routes/places");
 const statusRoutes = require("./routes/status");
+const { loadEnvFile } = require("./utils/json_loader");
 const { fallbackForPath } = require("./utils/fallback");
+
+loadEnvFile();
 
 const app = express();
 const PORT = process.env.PORT || 3001;
